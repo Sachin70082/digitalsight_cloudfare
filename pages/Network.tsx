@@ -229,7 +229,9 @@ const Network: React.FC = () => {
 
         try {
             if (nodeToModify.type === 'Label') {
-                await api.updateLabel(nodeToModify.id, modifyName, user);
+                // Pass an object with the updated name instead of just the string
+                // @fix Fix TypeScript error where string was passed instead of Partial<Label> object to api.updateLabel.
+                await api.updateLabel(nodeToModify.id, { name: modifyName }, user);
                 if (modifyPermissions) {
                     const admin = await api.getLabelAdmin(nodeToModify.id);
                     if (admin) {

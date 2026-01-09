@@ -73,7 +73,7 @@ const SubLabels: React.FC = () => {
         setIsLoading(true);
         try {
             if (editingLabelId) {
-                await api.updateLabel(editingLabelId, newName, user as User);
+                await api.updateLabel(editingLabelId, { name: newName }, user as User);
                 const admin = await api.getLabelAdmin(editingLabelId);
                 if (admin) {
                     await api.updateUserPermissions(admin.id, permissions, user as User);

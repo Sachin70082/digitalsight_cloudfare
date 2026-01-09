@@ -124,7 +124,7 @@ const Layout: React.FC = () => {
         <div className="flex h-screen bg-gray-900 font-sans">
             <aside className="w-64 bg-black flex-shrink-0 flex flex-col border-r border-gray-800">
                 <div className="h-16 flex items-center justify-center text-primary font-black text-2xl uppercase tracking-tighter">
-                    DistroPro
+                    Digitalsight
                 </div>
                 <div className="px-4 py-2 border-b border-gray-800/50">
                     <p className="text-[10px] font-black text-gray-600 uppercase tracking-widest">Access Mode</p>

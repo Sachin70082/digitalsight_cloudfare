@@ -234,7 +234,7 @@ const UniversalSearch: React.FC = () => {
                   <span className="flex items-center gap-1"><kbd className="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">ESC</kbd> to close</span>
                   <span className="flex items-center gap-1"><kbd className="bg-gray-800 px-1.5 py-0.5 rounded border border-gray-700">↵</kbd> to select</span>
                </div>
-               <span className="text-primary/50">MusicDistro spotlight</span>
+               <span className="text-primary/50">Digitalsight spotlight</span>
             </div>
           </div>
         )}

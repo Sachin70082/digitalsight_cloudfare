@@ -2,10 +2,12 @@
 import React, { useEffect, useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/mockApi';
+import { getReleaseExcelBuffer } from '../services/excelService';
 import { Release, ReleaseStatus, Track, UserRole, Artist, Label, InteractionNote } from '../types';
 import { AppContext } from '../App';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, PageLoader, Textarea, Modal, Spinner } from '../components/ui';
 import { DownloadIcon, CheckCircleIcon, XCircleIcon, ArrowLeftIcon } from '../components/Icons';
+import JSZip from 'jszip';
 
 const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div>
@@ -61,6 +63,10 @@ const ReleaseReview: React.FC = () => {
     const [isTakedownConfirmOpen, setTakedownConfirmOpen] = useState(false);
     const [feedbackNote, setFeedbackNote] = useState('');
 
+    // Package Download State
+    const [isDownloadingPackage, setIsDownloadingPackage] = useState(false);
+    const [packageProgress, setPackageProgress] = useState({ current: 0, total: 0, status: '' });
+
     useEffect(() => {
         const isStaff = user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE;
         if (!isStaff) {
@@ -97,6 +103,71 @@ const ReleaseReview: React.FC = () => {
             fetchData();
         }
     }, [releaseId, user, navigate]);
+
+    const handleDownloadPackage = async () => {
+        if (!release || !artist || !label) return;
+
+        setIsDownloadingPackage(true);
+        const zip = new JSZip();
+        const totalSteps = (release.tracks?.length || 0) + 2; // Tracks + Artwork + Excel
+        let currentStep = 0;
+
+        const updateStatus = (status: string) => {
+            currentStep++;
+            setPackageProgress({ current: currentStep, total: totalSteps, status });
+        };
+
+        try {
+            // 1. Generate Metadata Excel
+            updateStatus('Compiling Distribution Metadata...');
+            const artistsMap = new Map();
+            artistsMap.set(artist.id, artist);
+            const labelsMap = new Map();
+            labelsMap.set(label.id, label);
+            
+            const excelBuffer = getReleaseExcelBuffer(release, artistsMap, labelsMap);
+            zip.file(`${release.title}_Metadata.xlsx`, excelBuffer);
+
+            // 2. Fetch Artwork
+            updateStatus('Retrieving High-Res Artwork...');
+            if (release.artworkUrl) {
+                const artRes = await fetch(release.artworkUrl);
+                const artBlob = await artRes.blob();
+                const ext = release.artworkUrl.split('?')[0].split('.').pop() || 'jpg';
+                zip.file(`Artwork.${ext}`, artBlob);
+            }
+
+            // 3. Fetch All Tracks
+            const audioFolder = zip.folder("Audio_Masters");
+            for (const track of (release.tracks || [])) {
+                updateStatus(`Buffering Track ${track.trackNumber}: ${track.title}...`);
+                if (track.audioUrl) {
+                    const audioRes = await fetch(track.audioUrl);
+                    const audioBlob = await audioRes.blob();
+                    const safeName = track.title.replace(/[^a-z0-9]/gi, '_');
+                    audioFolder?.file(`${track.trackNumber.toString().padStart(2, '0')}_${safeName}.wav`, audioBlob);
+                }
+            }
+
+            // 4. Finalize & Save
+            setPackageProgress(prev => ({ ...prev, status: 'Finalizing ZIP Archive...' }));
+            const content = await zip.generateAsync({ type: "blob" });
+            const fileName = `${release.title.replace(/[^a-z0-9]/gi, '_')}_Digitalsight_Package.zip`;
+            
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(content);
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(link.href);
+
+            showToast('Distribution package successfully archived.', 'success');
+        } catch (e) {
+            console.error("Package build failed", e);
+            showToast('Failed to compile distribution package.', 'error');
+        } finally {
+            setIsDownloadingPackage(false);
+        }
+    };
     
     const handleStatusChange = async (newStatus: ReleaseStatus, message?: string) => {
         if (!release || !user) return;
@@ -122,7 +193,6 @@ const ReleaseReview: React.FC = () => {
                 showToast(`Session updated to ${newStatus}.`, 'success');
             }
             
-            // Redirect back to release queue
             navigate('/releases');
         } catch (error) {
             showToast('Operation failed. Please try again.', 'error');
@@ -142,6 +212,33 @@ const ReleaseReview: React.FC = () => {
 
     return (
         <div className="space-y-6 animate-fade-in pb-20">
+            {isDownloadingPackage && (
+                <div className="fixed inset-0 z-[2000] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-12 text-center animate-fade-in">
+                    <div className="w-full max-w-md space-y-10">
+                        <div className="relative">
+                            <Spinner className="w-24 h-24 border-primary border-t-transparent mx-auto" />
+                            <DownloadIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-8 h-8 text-primary" />
+                        </div>
+                        <div className="space-y-4">
+                            <h3 className="text-3xl font-black text-white uppercase tracking-tighter">Packaging Vault Data</h3>
+                            <p className="text-xs text-gray-500 font-mono tracking-widest uppercase truncate bg-white/5 py-2 px-4 rounded-lg border border-white/10">{packageProgress.status}</p>
+                        </div>
+                        <div className="space-y-2">
+                             <div className="flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest">
+                                <span>Segment Retrieval</span>
+                                <span>{packageProgress.current} / {packageProgress.total}</span>
+                             </div>
+                             <div className="relative h-2 w-full bg-gray-800 rounded-full overflow-hidden">
+                                <div 
+                                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-500 ease-out shadow-[0_0_20px_rgba(29,185,84,0.6)]" 
+                                    style={{ width: `${(packageProgress.current / packageProgress.total) * 100}%` }}
+                                />
+                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <div className="flex justify-between items-start">
                 <div className="flex items-center gap-4">
                     <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-800 rounded-full transition-colors text-gray-400 hover:text-white">
@@ -163,6 +260,24 @@ const ReleaseReview: React.FC = () => {
                         </CardContent>
                     </Card>
 
+                    <Card className="border border-primary/30 bg-primary/[0.02]">
+                        <CardHeader><CardTitle className="text-xs font-black uppercase text-primary tracking-widest">Distribution Control</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                             <Button 
+                                onClick={handleDownloadPackage}
+                                disabled={isDownloadingPackage || isProcessing}
+                                variant="primary"
+                                className="w-full flex items-center justify-center gap-3 py-4 shadow-2xl shadow-primary/20"
+                             >
+                                <DownloadIcon className="w-5 h-5" />
+                                <span className="text-xs uppercase font-black tracking-widest">Download Full Package</span>
+                             </Button>
+                             <p className="text-[9px] text-gray-500 text-center uppercase font-bold tracking-widest leading-relaxed">
+                                Archives Metadata (XLSX), Artwork, <br/> and WAV Masters into one ZIP.
+                             </p>
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardHeader className="flex justify-between items-center">
                             <CardTitle className="text-[10px] uppercase tracking-widest text-gray-500 font-black">Verification Journal</CardTitle>
@@ -172,7 +287,7 @@ const ReleaseReview: React.FC = () => {
                         </CardContent>
                     </Card>
 
-                    <Card className="border border-primary/20">
+                    <Card className="border border-gray-800">
                         <CardHeader><CardTitle className="text-sm">Administrative Gate</CardTitle></CardHeader>
                         <CardContent className="space-y-4">
                              <div className="grid grid-cols-1 gap-3">

@@ -1,5 +1,5 @@
 {
-  "name": "MusicDistro Pro",
+  "name": "Digitalsight",
   "description": "A multi-tenant web application for music distribution, allowing labels to manage artists and releases, and platform owners to review, approve, and export packages for digital service providers.",
   "requestFramePermissions": []
 }

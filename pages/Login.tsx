@@ -72,7 +72,7 @@ const Login: React.FC = () => {
             <CardContent className="pb-16 px-12">
                 <form onSubmit={handleFounderSetup} className="space-y-8">
                     <p className="text-sm text-gray-400 text-center leading-relaxed">
-                        Security verification successful. Please establish your master administrative identity to access the DistroPro Core.
+                        Security verification successful. Please establish your master administrative identity to access the Digitalsight Core.
                     </p>
                     <div className="space-y-6">
                         <Input 
@@ -112,7 +112,7 @@ const Login: React.FC = () => {
         <div className="relative z-10">
             <div className="flex items-center gap-4 mb-16">
                 <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center text-black font-black text-2xl shadow-lg shadow-primary/20">D</div>
-                <span className="text-3xl font-black text-white tracking-tighter uppercase">DistroPro</span>
+                <span className="text-3xl font-black text-white tracking-tighter uppercase">Digitalsight</span>
             </div>
             <h1 className="text-7xl font-black text-white tracking-tighter uppercase leading-[0.85] max-w-2xl">
                 Global Network <br/>
@@ -164,7 +164,7 @@ const Login: React.FC = () => {
                               type="email"
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
-                              placeholder="admin@distro.pro"
+                              placeholder="admin@digitalsight.pro"
                               required
                               className="h-16 pl-14 bg-black/40 border-gray-800 focus:border-primary text-base placeholder:text-gray-700 transition-all rounded-2xl"
                             />
@@ -243,7 +243,7 @@ const Login: React.FC = () => {
           <div className="mt-16 text-center">
               <p className="text-[11px] text-gray-700 font-black uppercase tracking-[0.5em] flex items-center justify-center gap-3">
                   <span className="h-px w-8 bg-gray-800"></span>
-                  DistroPro Security Architecture v3.4
+                  Digitalsight Security Architecture v3.4
                   <span className="h-px w-8 bg-gray-800"></span>
               </p>
           </div>

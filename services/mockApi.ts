@@ -144,15 +144,17 @@ export const api = {
     return all.filter(l => l.parentLabelId === parentLabelId);
   },
 
-  updateLabel: async (id: string, name: string, requester: User): Promise<Label> => {
-    await update(ref(db, `labels/${id}`), { name });
-    const usersSnap = await get(ref(db, 'users'));
-    const users = usersSnap.val() || {};
-    Object.keys(users).forEach(uid => {
-        if (users[uid].labelId === id) {
-            update(ref(db, `users/${uid}`), { labelName: name });
-        }
-    });
+  updateLabel: async (id: string, data: Partial<Label>, requester: User): Promise<Label> => {
+    await update(ref(db, `labels/${id}`), data);
+    if (data.name) {
+      const usersSnap = await get(ref(db, 'users'));
+      const users = usersSnap.val() || {};
+      Object.keys(users).forEach(uid => {
+          if (users[uid].labelId === id) {
+              update(ref(db, `users/${uid}`), { labelName: data.name });
+          }
+      });
+    }
     const labelSnap = await get(ref(db, `labels/${id}`));
     return labelSnap.val();
   },
