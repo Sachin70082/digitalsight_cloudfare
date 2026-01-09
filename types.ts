@@ -56,10 +56,13 @@ export interface UserPermissions {
   canManageArtists: boolean;
   canManageReleases: boolean;
   canCreateSubLabels: boolean;
+  canSubmitAlbums?: boolean; // New: Controls final submission to distribution
   // Platform Staff specific
   canManageEmployees?: boolean;
   canManageNetwork?: boolean;
   canViewFinancials?: boolean;
+  canOnboardLabels?: boolean;
+  canDeleteReleases?: boolean; // Authority to purge releases from vault
 }
 
 export interface User {

@@ -16,8 +16,8 @@ const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
 
 const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => (
     <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-        {notes.length === 0 ? (
-            <p className="text-gray-500 italic text-sm py-4">No activity history recorded yet.</p>
+        {(!notes || notes.length === 0) ? (
+            <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest py-4 text-center">No audit history recorded.</p>
         ) : notes.map((note) => (
             <div key={note.id} className={`p-4 rounded-xl border ${
                 note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE
@@ -46,7 +46,7 @@ const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => (
 const ReleaseReview: React.FC = () => {
     const { releaseId } = useParams<{ releaseId: string }>();
     const navigate = useNavigate();
-    const { user } = useContext(AppContext);
+    const { user, showToast } = useContext(AppContext);
     
     const [release, setRelease] = useState<Release | null>(null);
     const [artist, setArtist] = useState<Artist | null>(null);
@@ -78,8 +78,9 @@ const ReleaseReview: React.FC = () => {
                     }
                     setRelease(releaseData);
 
-                    if (releaseData.primaryArtistIds.length > 0) {
-                        const artistData = await api.getArtist(releaseData.primaryArtistIds[0]);
+                    const primaryIds = releaseData.primaryArtistIds || [];
+                    if (primaryIds.length > 0) {
+                        const artistData = await api.getArtist(primaryIds[0]);
                         setArtist(artistData || null);
                     }
 
@@ -115,10 +116,16 @@ const ReleaseReview: React.FC = () => {
 
             await api.updateReleaseStatus(release.id, newStatus, note);
             
+            if (newStatus === ReleaseStatus.REJECTED || newStatus === ReleaseStatus.TAKEDOWN) {
+                showToast('Asset Purge Complete: Audio masters removed from vault.', 'success');
+            } else {
+                showToast(`Session updated to ${newStatus}.`, 'success');
+            }
+            
             // Redirect back to release queue
             navigate('/releases');
         } catch (error) {
-            alert('Operation failed. Please try again.');
+            showToast('Operation failed. Please try again.', 'error');
         } finally {
             setIsProcessing(false);
             setReturnModalOpen(false);
@@ -191,13 +198,13 @@ const ReleaseReview: React.FC = () => {
                                         disabled={isProcessing}
                                         className="w-full flex items-center justify-center gap-2 py-3 border-yellow-500/50 text-yellow-500 hover:bg-yellow-500/10"
                                     >
-                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 9 9 0 01-18 0z" /></svg>
+                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 a9 9 0 01-18 0z" /></svg>
                                         Return for Correction
                                     </Button>
                                 )}
 
                                 <Button 
-                                    onClick={() => handleStatusChange(ReleaseStatus.REJECTED, "Hard rejection: Content fails distribution standards.")} 
+                                    onClick={() => handleStatusChange(ReleaseStatus.REJECTED, "Hard rejection: Content fails distribution standards. Audio masters purged.")} 
                                     variant="danger" 
                                     disabled={isProcessing || isPublished}
                                     className="w-full flex items-center justify-center gap-2 py-3"
@@ -205,7 +212,7 @@ const ReleaseReview: React.FC = () => {
                                     {isProcessing ? <Spinner className="w-5 h-5" /> : (
                                         <>
                                             <XCircleIcon className="w-5 h-5" /> 
-                                            Reject & Terminate
+                                            Reject & Purge Assets
                                         </>
                                     )}
                                 </Button>
@@ -253,7 +260,7 @@ const ReleaseReview: React.FC = () => {
                         <CardHeader><CardTitle>Audio Assets Quality Control</CardTitle></CardHeader>
                         <CardContent>
                             <ul className="space-y-6">
-                                {release.tracks.map((track: Track) => (
+                                {(release.tracks || []).map((track: Track) => (
                                     <li key={track.id} className="p-6 bg-gray-900/40 rounded-2xl border border-gray-800 hover:border-gray-700 transition-colors">
                                         <div className="flex items-center justify-between mb-6">
                                             <div className="flex items-center gap-4">
@@ -343,7 +350,7 @@ const ReleaseReview: React.FC = () => {
                     <div className="p-4 bg-orange-900/20 border border-orange-500/30 rounded-xl">
                         <p className="text-sm text-orange-400 font-bold uppercase mb-1">Takedown Request</p>
                         <p className="text-sm text-gray-300">
-                            You are requesting the removal of this release from all distribution channels. This process can take 2-5 business days to propagate across stores.
+                            You are requesting the removal of this release from all distribution channels. This will purge all audio masters from the vault.
                         </p>
                     </div>
                     <div className="space-y-2">
@@ -361,7 +368,7 @@ const ReleaseReview: React.FC = () => {
                         <Button 
                             className="flex-1 bg-orange-600 hover:bg-orange-500 border-none" 
                             disabled={!feedbackNote.trim() || isProcessing}
-                            onClick={() => handleStatusChange(ReleaseStatus.TAKEDOWN, `Takedown initiated: ${feedbackNote}`)}
+                            onClick={() => handleStatusChange(ReleaseStatus.TAKEDOWN, `Takedown initiated: ${feedbackNote}. Audio masters purged.`)}
                         >
                             {isProcessing ? <Spinner className="w-5 h-5" /> : 'Process Takedown'}
                         </Button>

@@ -19,48 +19,53 @@ const FAQ: React.FC = () => {
 
     return (
         <div className="max-w-5xl mx-auto py-10 animate-fade-in">
-            <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-8">
-                <div className="flex items-center gap-6">
-                    <div className="w-16 h-16 bg-purple-500/20 text-purple-400 rounded-2xl flex items-center justify-center flex-shrink-0">
-                        <QuestionMarkIcon className="w-8 h-8" />
+            <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-8 border-b border-white/5 pb-12">
+                <div className="flex items-center gap-8">
+                    <div className="w-20 h-20 bg-purple-500/20 text-purple-400 rounded-[2rem] flex items-center justify-center flex-shrink-0 shadow-xl shadow-purple-500/10">
+                        <QuestionMarkIcon className="w-10 h-10" />
                     </div>
                     <div>
-                        <h1 className="text-4xl font-black text-white uppercase italic tracking-tighter leading-none">Knowledge Vault</h1>
-                        <p className="text-gray-400 mt-2">Platform guides, distribution rules, and technical specs.</p>
+                        <h1 className="text-5xl font-black text-white uppercase tracking-tighter leading-none">Knowledge Vault</h1>
+                        <p className="text-gray-500 mt-3 font-medium text-lg">Platform guides, distribution rules, and technical specs.</p>
                     </div>
                 </div>
-                <div className="w-full md:w-80">
+                <div className="w-full md:w-96 relative group">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-purple-500 transition-colors">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                    </div>
                     <Input 
                         placeholder="Search documentation..." 
                         value={search} 
                         onChange={e => setSearch(e.target.value)} 
-                        className="rounded-full bg-gray-800 border-gray-700"
+                        className="rounded-[1.5rem] h-16 pl-16 bg-gray-800/40 border-gray-700 text-lg placeholder:text-gray-600 transition-all focus:ring-purple-500/50"
                     />
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {filtered.map((faq, i) => (
-                    <Card key={i} className="hover:border-purple-500/30 transition-all border border-transparent">
-                        <CardHeader><CardTitle className="text-sm text-purple-400">Q: {faq.q}</CardTitle></CardHeader>
-                        <CardContent>
-                            <p className="text-gray-300 text-sm leading-relaxed">{faq.a}</p>
+                    <Card key={i} className="hover:border-purple-500/30 transition-all border border-white/5 bg-white/[0.02] rounded-[2.5rem] p-10 group shadow-2xl">
+                        <CardHeader className="border-none p-0 mb-6">
+                            <CardTitle className="text-lg text-purple-400 font-black uppercase tracking-tight leading-tight group-hover:text-white transition-colors">Q: {faq.q}</CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            <p className="text-gray-400 text-lg leading-relaxed font-medium">{faq.a}</p>
                         </CardContent>
                     </Card>
                 ))}
                 {filtered.length === 0 && (
-                    <div className="col-span-full py-20 text-center text-gray-600 italic border-2 border-dashed border-gray-800 rounded-3xl">
-                        No documentation found matching your query. Try 'Audio', 'Payments', or 'Metadata'.
+                    <div className="col-span-full py-32 text-center text-gray-700 font-black uppercase tracking-[0.3em] border-2 border-dashed border-white/5 rounded-[3rem] bg-white/[0.01]">
+                        Zero documentation entries identified.
                     </div>
                 )}
             </div>
 
-            <div className="mt-12 p-8 bg-gradient-to-r from-purple-900/20 to-transparent border-l-4 border-purple-500 rounded-r-2xl">
-                <h3 className="text-white font-bold mb-2">Technical Standards Manual</h3>
-                <p className="text-sm text-gray-400 max-w-2xl mb-6">Download the full technical documentation including Excel bulk upload templates and XML delivery schemas.</p>
-                <button className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-[10px] tracking-widest px-6 py-3 rounded-full transition-all">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                    Download PDF Guide
+            <div className="mt-20 p-12 bg-gradient-to-r from-purple-900/20 to-transparent border-l-[12px] border-purple-500 rounded-[3rem] shadow-2xl">
+                <h3 className="text-3xl font-black text-white uppercase tracking-tight mb-4">Technical Standards Manual</h3>
+                <p className="text-lg text-gray-400 max-w-2xl mb-10 font-medium">Download the full technical documentation including Excel bulk upload templates, XML delivery schemas, and DDEX ingestion protocols.</p>
+                <button className="flex items-center gap-4 bg-purple-600 hover:bg-purple-500 text-white font-black uppercase text-[11px] tracking-[0.25em] px-10 py-5 rounded-2xl transition-all shadow-xl shadow-purple-900/20">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    Download Ingest Protocol PDF
                 </button>
             </div>
         </div>

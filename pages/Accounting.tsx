@@ -3,7 +3,7 @@ import React, { useContext, useEffect, useState, useMemo } from 'react';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { RevenueEntry, Label, Release, Artist, UserRole } from '../types';
-import { Card, CardContent, CardHeader, CardTitle, Button, Input, Spinner, PageLoader } from '../components/ui';
+import { Card, CardContent, CardHeader, CardTitle, Button, Input, Spinner, PageLoader, Pagination } from '../components/ui';
 import { DownloadIcon, ArrowUpIcon, ArrowDownIcon } from '../components/Icons';
 import { exportFinancialsToExcel } from '../services/excelService';
 
@@ -22,6 +22,10 @@ const Accounting: React.FC = () => {
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 25;
+
     useEffect(() => {
         const fetchData = async () => {
             setIsLoading(true);
@@ -37,7 +41,6 @@ const Accounting: React.FC = () => {
 
                 setRevenue(allRev);
                 
-                // Set default filter to most recent month
                 const months = (Array.from(new Set(allRev.map(r => r.reportMonth))) as string[]).sort((a,b) => b.localeCompare(a));
                 if (months.length > 0) {
                     setMonthFilter(months[0]);
@@ -63,6 +66,11 @@ const Accounting: React.FC = () => {
         fetchData();
     }, [user]);
 
+    // Reset pagination when filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [monthFilter, labelFilter, storeFilter, startDate, endDate]);
+
     const filteredRevenue = useMemo(() => {
         return revenue.filter(e => {
             const matchesMonth = monthFilter === 'ALL' || e.reportMonth === monthFilter;
@@ -78,8 +86,13 @@ const Accounting: React.FC = () => {
             }
 
             return matchesMonth && matchesLabel && matchesStore && matchesDate;
-        });
+        }).sort((a, b) => b.date.localeCompare(a.date));
     }, [revenue, monthFilter, labelFilter, storeFilter, startDate, endDate]);
+
+    const paginatedRevenue = useMemo(() => {
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        return filteredRevenue.slice(startIndex, startIndex + itemsPerPage);
+    }, [filteredRevenue, currentPage]);
 
     const stats = useMemo(() => {
         let totalVal = 0;
@@ -130,16 +143,16 @@ const Accounting: React.FC = () => {
         exportFinancialsToExcel(filteredRevenue, labels, releases, artists);
     };
 
-    // Helper for hierarchical label dropdown
     const getHierarchyOptions = () => {
-        // Fix: Explicitly type 'all' as Label[] to prevent unknown type inference in filters and closures
         const all: Label[] = Array.from(labels.values());
         const result: { id: string, name: string, depth: number }[] = [];
+        const visited = new Set<string>();
 
         const traverse = (parentId: string | undefined, depth: number) => {
-            // Fix: Added explicit types to filter and forEach callbacks to resolve property access errors
             const children = all.filter((l: Label) => l.parentLabelId === parentId);
             children.forEach((c: Label) => {
+                if (visited.has(c.id)) return;
+                visited.add(c.id);
                 result.push({ id: c.id, name: c.name, depth });
                 traverse(c.id, depth + 1);
             });
@@ -150,6 +163,7 @@ const Accounting: React.FC = () => {
         } else if (user?.labelId) {
             const myLabel = labels.get(user.labelId);
             if (myLabel) {
+                visited.add(myLabel.id);
                 result.push({ id: myLabel.id, name: `${myLabel.name} (Self)`, depth: 0 });
                 traverse(myLabel.id, 1);
             }
@@ -164,84 +178,76 @@ const Accounting: React.FC = () => {
     return (
         <div className="space-y-6 animate-fade-in">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h1 className="text-3xl font-bold text-white">
-                    {user?.role === UserRole.OWNER ? 'Financial Accounting' : 'Label Earnings Explorer'}
-                </h1>
+                <h1 className="text-3xl font-black text-white tracking-tight uppercase">Earnings Architecture</h1>
                 <div className="flex gap-2 w-full md:w-auto">
-                    <Button onClick={handleExport} className="flex-1 md:flex-none flex items-center justify-center gap-2">
-                        <DownloadIcon /> Export Selective Report
+                    <Button onClick={handleExport} className="flex-1 md:flex-none flex items-center justify-center gap-2 text-[10px] px-8 font-black uppercase tracking-widest shadow-xl shadow-primary/20">
+                        <DownloadIcon className="w-4 h-4" /> Export Analytics
                     </Button>
                 </div>
             </div>
 
-            {/* Stats Overview */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="border-l-4 border-primary">
-                    <CardContent className="pt-6">
-                        <p className="text-gray-400 text-sm uppercase font-bold">Aggregated Gross Revenue</p>
-                        <p className="text-3xl font-bold text-white mt-1">${stats.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        <p className="text-[10px] text-gray-500 mt-1 uppercase tracking-tighter">Based on selective label filtering</p>
+                <Card className="border-l-8 border-primary bg-black/40 shadow-xl p-8">
+                    <CardContent className="p-0">
+                        <p className="text-gray-500 text-[10px] uppercase font-black tracking-widest mb-2">Aggregated Gross</p>
+                        <p className="text-4xl font-black text-white mt-1 tracking-tighter">${stats.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-blue-500">
-                    <CardContent className="pt-6">
-                        <p className="text-gray-400 text-sm uppercase font-bold">Paid to Date</p>
-                        <p className="text-3xl font-bold text-white mt-1">${stats.paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        <p className="text-xs text-gray-500 mt-2">Cycle Ready</p>
+                <Card className="border-l-8 border-blue-500 bg-black/40 shadow-xl p-8">
+                    <CardContent className="p-0">
+                        <p className="text-gray-500 text-[10px] uppercase font-black tracking-widest mb-2">Authenticated Payouts</p>
+                        <p className="text-4xl font-black text-white mt-1 tracking-tighter">${stats.paid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </CardContent>
                 </Card>
-                <Card className="border-l-4 border-yellow-500">
-                    <CardContent className="pt-6">
-                        <p className="text-gray-400 text-sm uppercase font-bold">Accumulating / Pending</p>
-                        <p className="text-3xl font-bold text-white mt-1">${stats.pending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
-                        <p className="text-xs text-gray-500 mt-2">Next Payout Estimate</p>
+                <Card className="border-l-8 border-yellow-500 bg-black/40 shadow-xl p-8">
+                    <CardContent className="p-0">
+                        <p className="text-gray-500 text-[10px] uppercase font-black tracking-widest mb-2">Accumulating Balance</p>
+                        <p className="text-4xl font-black text-white mt-1 tracking-tighter">${stats.pending.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                     </CardContent>
                 </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
                 
-                {/* Filters Sidebar */}
-                <Card className="lg:col-span-1 h-fit">
-                    <CardHeader>
-                        <CardTitle>Network Filters</CardTitle>
+                <Card className="lg:col-span-1 h-fit border-white/5 bg-white/[0.02]">
+                    <CardHeader className="border-white/5 mb-6">
+                        <CardTitle className="text-xs uppercase tracking-[0.2em] font-black text-gray-500">Intelligent Filters</CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-5">
+                    <CardContent className="space-y-6">
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Target Label / Sub-Label</label>
+                            <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Node Selection</label>
                             <select 
                                 value={labelFilter} 
                                 onChange={e => setLabelFilter(e.target.value)}
-                                className="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm text-white focus:ring-1 focus:ring-primary"
+                                className="w-full bg-black/40 border border-gray-800 rounded-xl p-3 text-[11px] font-bold text-white focus:ring-1 focus:ring-primary outline-none transition-all"
                             >
-                                <option value="ALL">All Network Revenue</option>
+                                <option value="ALL">All Network Nodes</option>
                                 {hierarchyOptions.map(opt => (
                                     <option key={opt.id} value={opt.id}>
                                         {'\u00A0'.repeat(opt.depth * 3)}{opt.depth > 0 ? '↳ ' : ''}{opt.name}
                                     </option>
                                 ))}
                             </select>
-                            <p className="text-[10px] text-gray-500 mt-2">Select any children label ID to track specific performance.</p>
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Report Month</label>
+                            <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Statement Cycle</label>
                             <select 
                                 value={monthFilter} 
                                 onChange={e => setMonthFilter(e.target.value)}
-                                className="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm text-white"
+                                className="w-full bg-black/40 border border-gray-800 rounded-xl p-3 text-[11px] font-bold text-white focus:ring-1 focus:ring-primary outline-none transition-all"
                             >
-                                <option value="ALL">All Available Cycles</option>
+                                <option value="ALL">Entire Archive</option>
                                 {availableMonths.map(m => <option key={m} value={m}>{m}</option>)}
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase mb-2">Store Channel</label>
+                            <label className="block text-[9px] font-black text-gray-600 uppercase tracking-widest mb-2">Store Endpoint</label>
                             <select 
                                 value={storeFilter} 
                                 onChange={e => setStoreFilter(e.target.value)}
-                                className="w-full bg-gray-900 border border-gray-700 rounded p-3 text-sm text-white"
+                                className="w-full bg-black/40 border border-gray-800 rounded-xl p-3 text-[11px] font-bold text-white focus:ring-1 focus:ring-primary outline-none transition-all"
                             >
                                 <option value="ALL">All Global Stores</option>
                                 {(Array.from(new Set(revenue.map(r => r.store))) as string[]).sort().map(s => (
@@ -250,147 +256,76 @@ const Accounting: React.FC = () => {
                             </select>
                         </div>
 
-                        <div className="pt-4 border-t border-gray-800">
-                             <Button variant="secondary" onClick={() => {
-                                setMonthFilter('ALL');
-                                setLabelFilter('ALL');
-                                setStoreFilter('ALL');
-                                setStartDate('');
-                                setEndDate('');
-                            }} className="w-full text-[10px] uppercase font-bold tracking-wider">Reset Analytics</Button>
-                        </div>
+                        <Button variant="secondary" onClick={() => {
+                            setMonthFilter('ALL');
+                            setLabelFilter('ALL');
+                            setStoreFilter('ALL');
+                        }} className="w-full text-[9px] uppercase font-black tracking-[0.2em] py-4">Purge Query</Button>
                     </CardContent>
                 </Card>
 
-                {/* Main Charts Area */}
-                <div className="lg:col-span-3 space-y-6">
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {/* Summary Card */}
-                        <Card className="bg-gradient-to-br from-gray-800 to-gray-900 border border-gray-700">
-                            <CardHeader>
-                                <CardTitle className="text-sm uppercase tracking-widest text-gray-400">Network Insight</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Top Performing Store</p>
-                                    <p className="text-xl font-bold text-white">{storeBreakdown[0]?.name || 'No Data'}</p>
-                                    <div className="w-full bg-gray-800 h-1 mt-2 rounded-full overflow-hidden">
-                                        <div className="bg-primary h-full" style={{ width: `${storeBreakdown[0]?.percentage || 0}%` }}></div>
-                                    </div>
-                                </div>
-                                <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-800">
-                                    <p className="text-[10px] text-gray-500 uppercase font-bold mb-1">Active Catalog</p>
-                                    <p className="text-xl font-bold text-white">
-                                        {Array.from(new Set(filteredRevenue.map(r => r.labelId))).length} Connected Labels
-                                    </p>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Trend Chart */}
-                        <Card className="border border-gray-700">
-                            <CardHeader>
-                                <CardTitle className="text-sm uppercase tracking-widest text-gray-400">Monthly Payout Trend</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="h-40 flex items-end gap-2 px-2">
-                                    {chartData.map((d, i) => (
-                                        <div key={i} className="flex-1 flex flex-col items-center group relative h-full justify-end">
-                                            <div 
-                                                className={`w-full ${d.month === monthFilter ? 'bg-primary shadow-[0_0_10px_rgba(29,185,84,0.3)]' : 'bg-gray-700'} rounded-t-sm transition-all hover:bg-primary-dark cursor-pointer`} 
-                                                style={{ height: `${(d.amount / maxTrendVal) * 90}%` }}
-                                                onClick={() => setMonthFilter(d.month)}
-                                            >
-                                                <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-black border border-gray-700 text-white text-[9px] p-2 rounded whitespace-nowrap opacity-0 group-hover:opacity-100 z-10 pointer-events-none">
-                                                    {d.month}: ${d.amount.toFixed(2)}
-                                                </div>
-                                            </div>
-                                            <span className="text-[9px] font-bold text-gray-500 mt-2">{d.month.split('-')[1]}/{d.month.split('-')[0].slice(2)}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    {/* Detailed Entries Table */}
-                    <Card className="border border-gray-800">
-                        <CardHeader className="flex flex-row justify-between items-center border-b border-gray-800 pb-4">
-                            <CardTitle>Hierarchical Earnings Log</CardTitle>
-                            <span className="text-[10px] font-bold text-gray-500 uppercase bg-gray-800 px-3 py-1 rounded-full">{filteredRevenue.length} Records</span>
+                <div className="lg:col-span-3 space-y-8">
+                    <Card className="p-0 overflow-hidden border-white/5 shadow-2xl">
+                        <CardHeader className="p-8 border-white/5 flex flex-row justify-between items-center bg-white/[0.01]">
+                            <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-400">Statement of Revenue</CardTitle>
+                            <span className="text-[10px] font-black text-gray-600 uppercase tracking-widest bg-black/20 px-4 py-1 rounded-full border border-white/5">{filteredRevenue.length} Total Entries</span>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
-                                    <thead className="bg-gray-800/50 text-[10px] font-black uppercase text-gray-500 tracking-wider">
+                                    <thead className="bg-black/20 text-[9px] font-black uppercase text-gray-500 tracking-[0.2em]">
                                         <tr>
-                                            <th className="px-6 py-4 border-b border-gray-800">ID / Month</th>
-                                            <th className="px-6 py-4 border-b border-gray-800">Associated Label</th>
-                                            <th className="px-6 py-4 border-b border-gray-800">Source / Store</th>
-                                            <th className="px-6 py-4 border-b border-gray-800">Region</th>
-                                            <th className="px-6 py-4 border-b border-gray-800 text-right">Net Amount</th>
+                                            <th className="px-8 py-5">Node Identity</th>
+                                            <th className="px-8 py-5">Endpoint / Region</th>
+                                            <th className="px-8 py-5">Cycle</th>
+                                            <th className="px-8 py-5 text-right">Net Value</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-800 text-xs">
-                                        {filteredRevenue.slice(0, 30).map(e => {
+                                    <tbody className="divide-y divide-white/5">
+                                        {paginatedRevenue.map(e => {
                                             const label = labels.get(e.labelId);
-                                            const isSelf = e.labelId === user?.labelId;
                                             return (
-                                                <tr key={e.id} className="hover:bg-gray-800/40 transition-colors">
-                                                    <td className="px-6 py-4">
-                                                        <div className="font-mono text-gray-500">{e.id.slice(0, 12)}...</div>
-                                                        <div className="text-white font-bold mt-0.5">{e.reportMonth}</div>
+                                                <tr key={e.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                    <td className="px-8 py-6">
+                                                        <p className="text-white font-black text-xs uppercase group-hover:text-primary transition-colors tracking-tight">{label?.name || 'Unknown Node'}</p>
+                                                        <p className="text-[9px] text-gray-600 font-mono mt-1 uppercase">ID: {e.labelId.slice(0,12)}...</p>
                                                     </td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className={`w-1.5 h-1.5 rounded-full ${isSelf ? 'bg-primary' : 'bg-blue-500'}`}></div>
-                                                            <span className="text-gray-300 font-medium">{label?.name || 'Unknown'}</span>
-                                                        </div>
-                                                        <div className="text-[9px] text-gray-600 font-mono mt-0.5">LABEL ID: {e.labelId}</div>
+                                                    <td className="px-8 py-6">
+                                                        <span className="px-2.5 py-1 bg-black/40 border border-white/5 rounded-lg text-[9px] font-black text-gray-400 uppercase tracking-widest">{e.store}</span>
+                                                        <span className="ml-3 text-[10px] text-gray-600 font-bold uppercase">{e.territory}</span>
                                                     </td>
-                                                    <td className="px-6 py-4">
-                                                        <span className="px-2 py-1 bg-gray-900 border border-gray-700 rounded-sm text-[10px] font-bold text-gray-400">{e.store}</span>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-gray-500 font-bold uppercase tracking-widest">{e.territory}</td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <div className={`font-mono font-bold text-sm ${e.paymentStatus === 'Paid' ? 'text-white' : 'text-yellow-500/80'}`}>
+                                                    <td className="px-8 py-6 text-[10px] text-gray-500 font-black tracking-widest uppercase">{e.reportMonth}</td>
+                                                    <td className="px-8 py-6 text-right">
+                                                        <div className={`font-mono font-black text-sm tracking-tighter ${e.paymentStatus === 'Paid' ? 'text-white' : 'text-yellow-500/80'}`}>
                                                             ${e.amount.toFixed(2)}
                                                         </div>
-                                                        <div className={`text-[9px] uppercase font-black ${e.paymentStatus === 'Paid' ? 'text-primary' : 'text-yellow-600'}`}>
+                                                        <div className={`text-[8px] uppercase font-black tracking-[0.2em] mt-1 ${e.paymentStatus === 'Paid' ? 'text-primary' : 'text-yellow-600'}`}>
                                                             {e.paymentStatus}
                                                         </div>
                                                     </td>
                                                 </tr>
                                             );
                                         })}
-                                        {filteredRevenue.length === 0 && (
+                                        {paginatedRevenue.length === 0 && (
                                             <tr>
-                                                <td colSpan={5} className="px-6 py-32 text-center text-gray-600 italic">
-                                                    No selective revenue data found for this hierarchy branch.
+                                                <td colSpan={4} className="px-8 py-40 text-center text-gray-700 uppercase font-black tracking-widest text-[11px] opacity-40">
+                                                    Zero revenue data identified for this branch.
                                                 </td>
                                             </tr>
                                         )}
                                     </tbody>
                                 </table>
-                                {filteredRevenue.length > 30 && (
-                                    <div className="p-4 text-center border-t border-gray-800 text-[10px] font-bold text-gray-500 uppercase">
-                                        Showing first 30 entries. Download full CSV for complete audit.
-                                    </div>
-                                )}
                             </div>
+                            <Pagination 
+                                totalItems={filteredRevenue.length}
+                                itemsPerPage={itemsPerPage}
+                                currentPage={currentPage}
+                                onPageChange={setCurrentPage}
+                            />
                         </CardContent>
                     </Card>
-
                 </div>
-
             </div>
-            
-            <style>{`
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: #282828; border-radius: 4px; }
-            `}</style>
         </div>
     );
 };

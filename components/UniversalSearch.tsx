@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../services/mockApi';
@@ -62,7 +63,11 @@ const UniversalSearch: React.FC = () => {
     }
   };
 
-  const hasResults = results && (results.labels.length > 0 || results.artists.length > 0 || results.releases.length > 0);
+  const hasResults = results && (
+    (results.labels && results.labels.length > 0) || 
+    (results.artists && results.artists.length > 0) || 
+    (results.releases && results.releases.length > 0)
+  );
 
   return (
     <>
@@ -122,7 +127,7 @@ const UniversalSearch: React.FC = () => {
 
               {results && hasResults && (
                 <div className="space-y-6 p-2">
-                  {results.releases.length > 0 && (
+                  {results.releases && results.releases.length > 0 && (
                     <div className="animate-fade-in [animation-delay:50ms]">
                       <h4 className="px-3 py-2 text-[10px] font-black text-primary uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary" />
@@ -158,7 +163,7 @@ const UniversalSearch: React.FC = () => {
                     </div>
                   )}
 
-                  {results.artists.length > 0 && (
+                  {results.artists && results.artists.length > 0 && (
                     <div className="animate-fade-in [animation-delay:100ms]">
                       <h4 className="px-3 py-2 text-[10px] font-black text-green-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -172,7 +177,7 @@ const UniversalSearch: React.FC = () => {
                             className="w-full text-left px-3 py-2.5 hover:bg-white/5 rounded-xl transition-all duration-200 flex items-center gap-4 group"
                           >
                             <div className="w-11 h-11 bg-gradient-to-br from-green-900/40 to-black text-green-500 rounded-full flex items-center justify-center font-bold text-sm border border-green-500/20 shadow-lg group-hover:shadow-green-500/10 transition-all duration-300 group-hover:scale-105">
-                                {a.name.charAt(0)}
+                                {(a.name || 'A').charAt(0)}
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-bold text-white group-hover:text-green-400 transition-colors truncate">{a.name}</p>
@@ -191,7 +196,7 @@ const UniversalSearch: React.FC = () => {
                     </div>
                   )}
 
-                  {results.labels.length > 0 && (
+                  {results.labels && results.labels.length > 0 && (
                     <div className="animate-fade-in [animation-delay:150ms]">
                       <h4 className="px-3 py-2 text-[10px] font-black text-blue-500 uppercase tracking-[0.2em] mb-2 flex items-center gap-2">
                         <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />

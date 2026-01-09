@@ -54,37 +54,43 @@ const Network: React.FC = () => {
         const allLabels = await api.getLabels();
         const allArtists = await api.getAllArtists();
         
-        // Pre-fetch admins for all labels to get emails
         const labelAdminMap = new Map<string, string>();
         for(const l of allLabels) {
             const admin = await api.getLabelAdmin(l.id);
             if (admin) labelAdminMap.set(l.id, admin.email);
         }
 
+        const visited = new Set<string>();
+
         const getSubtree = (parentId: string | undefined): HierarchyNode[] => {
             const filteredLabels = allLabels.filter(l => l.parentLabelId === parentId);
-            const nodes: HierarchyNode[] = filteredLabels.map(label => ({
-                id: label.id,
-                name: label.name,
-                type: 'Label',
-                email: labelAdminMap.get(label.id),
-                parentId: parentId,
-                children: [
-                    ...getSubtree(label.id),
-                    ...allArtists
-                        .filter(a => a.labelId === label.id)
-                        .map(a => ({ 
-                            id: a.id, 
-                            name: a.name, 
-                            type: 'Artist' as const, 
-                            email: a.email,
-                            artistType: a.type,
-                            spotifyId: a.spotifyId,
-                            appleMusicId: a.appleMusicId,
-                            instagramUrl: a.instagramUrl
-                        }))
-                ]
-            }));
+            const nodes: HierarchyNode[] = filteredLabels.map(label => {
+                if (visited.has(label.id)) return null; 
+                visited.add(label.id);
+
+                return {
+                    id: label.id,
+                    name: label.name,
+                    type: 'Label',
+                    email: labelAdminMap.get(label.id),
+                    parentId: parentId,
+                    children: [
+                        ...getSubtree(label.id),
+                        ...allArtists
+                            .filter(a => a.labelId === label.id)
+                            .map(a => ({ 
+                                id: a.id, 
+                                name: a.name, 
+                                type: 'Artist' as const, 
+                                email: a.email,
+                                artistType: a.type,
+                                spotifyId: a.spotifyId,
+                                appleMusicId: a.appleMusicId,
+                                instagramUrl: a.instagramUrl
+                            }))
+                    ]
+                };
+            }).filter(n => n !== null) as HierarchyNode[];
             return nodes;
         };
 
@@ -94,6 +100,7 @@ const Network: React.FC = () => {
         } else if (user?.labelId) {
             const myLabel = allLabels.find(l => l.id === user.labelId);
             if (myLabel) {
+                visited.add(myLabel.id);
                 finalNodes = [{
                     id: myLabel.id,
                     name: myLabel.name,
@@ -113,7 +120,6 @@ const Network: React.FC = () => {
                         }))
                     ]
                 }];
-                // Expand current user's root by default
                 setExpandedIds(prev => new Set([...prev, myLabel.id]));
             }
         }
@@ -125,10 +131,8 @@ const Network: React.FC = () => {
         buildTree();
     }, [user]);
 
-    // Recursive search logic: keep parents of matching children
     const filteredTree = useMemo(() => {
         if (!searchTerm) return tree;
-
         const term = searchTerm.toLowerCase();
         
         const filterNodes = (nodes: HierarchyNode[]): HierarchyNode[] => {
@@ -141,14 +145,6 @@ const Network: React.FC = () => {
                         (node.email && node.email.toLowerCase().includes(term));
                     
                     if (selfMatches || childrenMatch.length > 0) {
-                        // If searching, auto-expand parents
-                        if (term.length > 1) {
-                            setExpandedIds(prev => {
-                                const next = new Set(prev);
-                                next.add(node.id);
-                                return next;
-                            });
-                        }
                         return { ...node, children: childrenMatch };
                     }
                     return null;
@@ -158,6 +154,22 @@ const Network: React.FC = () => {
 
         return filterNodes(tree);
     }, [tree, searchTerm]);
+
+    useEffect(() => {
+        if (searchTerm.length > 1) {
+            const idsToExpand = new Set<string>();
+            const collectParentIds = (nodes: HierarchyNode[]) => {
+                nodes.forEach(node => {
+                    if (node.children && node.children.length > 0) {
+                        idsToExpand.add(node.id);
+                        collectParentIds(node.children);
+                    }
+                });
+            };
+            collectParentIds(filteredTree);
+            setExpandedIds(prev => new Set([...prev, ...idsToExpand]));
+        }
+    }, [filteredTree, searchTerm]);
 
     const handleOpenRemove = (node: HierarchyNode) => {
         setNodeToRemove(node);
@@ -175,12 +187,12 @@ const Network: React.FC = () => {
             } else {
                 await api.deleteArtist(nodeToRemove.id, user);
             }
-            showToast(`${nodeToRemove.name} terminated from network.`, 'success');
+            showToast(`${nodeToRemove.name} purged from network hierarchy.`, 'success');
             setRemovalModalOpen(false);
             setNodeToRemove(null);
             await buildTree();
         } catch (e: any) {
-            showToast(e.message || 'Termination failed', 'error');
+            showToast(e.message || 'Purge failed', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -193,7 +205,10 @@ const Network: React.FC = () => {
         
         if (node.type === 'Label') {
             const admin = await api.getLabelAdmin(node.id);
-            if (admin) setModifyPermissions(admin.permissions);
+            if (admin) setModifyPermissions({
+                ...admin.permissions,
+                canSubmitAlbums: admin.permissions.canSubmitAlbums ?? true
+            });
             setModifyArtistType(ArtistType.SINGER);
             setModifySpotifyId('');
             setModifyAppleMusicId('');
@@ -231,11 +246,11 @@ const Network: React.FC = () => {
                     instagramUrl: modifyInstagramUrl
                 }, user);
             }
-            showToast('Changes synchronized with network hierarchy.', 'success');
+            showToast('Node authority matrix synchronized.', 'success');
             setModifyModalOpen(false);
             await buildTree();
         } catch (e: any) {
-            showToast(e.message || 'Failed to modify node', 'error');
+            showToast(e.message || 'Sync failed', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -244,7 +259,6 @@ const Network: React.FC = () => {
     const renderNode = (node: HierarchyNode, depth: number = 0) => {
         const isExpanded = expandedIds.has(node.id);
         const hasChildren = node.children && node.children.length > 0;
-        
         const isOwnRoot = user?.labelId === node.id && user?.role !== UserRole.OWNER;
         const canAction = !isOwnRoot;
 
@@ -266,33 +280,19 @@ const Network: React.FC = () => {
                             <div className="flex items-center gap-2">
                                 <span className={`w-2.5 h-2.5 rounded-full ${node.type === 'Label' ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' : 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]'}`}></span>
                                 <span className={`font-bold ${node.type === 'Label' ? 'text-white text-base' : 'text-gray-200 text-sm'}`}>{node.name}</span>
-                                {isOwnRoot && <span className="text-[9px] bg-primary text-white px-1.5 py-0.5 rounded-sm font-bold ml-1 uppercase">Your Label</span>}
-                                {!isOwnRoot && <span className="text-[9px] bg-gray-700 text-gray-400 px-1.5 py-0.5 rounded-sm font-bold ml-1 uppercase">{node.parentId === user?.labelId ? 'Direct Child' : 'Sub-Network'}</span>}
+                                {isOwnRoot && <span className="text-[9px] bg-primary text-white px-1.5 py-0.5 rounded-sm font-bold ml-1 uppercase">Root Axis</span>}
                             </div>
                             <div className="flex items-center gap-3 mt-1">
-                                <span className="text-[10px] font-mono text-gray-500">{node.type === 'Label' ? 'LABEL' : 'ARTIST'} ID: {node.id}</span>
-                                <span className="text-gray-700">|</span>
-                                <span className="text-[10px] text-gray-400 italic">{node.email || 'No email registered'}</span>
+                                <span className="text-[10px] font-mono text-gray-500">ID: {node.id?.toUpperCase() || 'UNASSIGNED'}</span>
+                                <span className="text-[10px] text-gray-400">{node.email || 'REDACTED'}</span>
                             </div>
                         </div>
                     </div>
                     
                     {canAction && (
                         <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-3">
-                            <Button 
-                                variant="secondary" 
-                                className="text-[10px] py-1 px-4 uppercase tracking-wider h-8 font-bold"
-                                onClick={() => handleOpenModify(node)}
-                            >
-                                Modify
-                            </Button>
-                            <Button 
-                                variant="danger" 
-                                className="text-[10px] py-1 px-4 uppercase tracking-wider h-8 font-bold"
-                                onClick={() => handleOpenRemove(node)}
-                            >
-                                Terminate
-                            </Button>
+                            <Button variant="secondary" className="text-[10px] py-1 px-4 uppercase h-8 font-bold" onClick={() => handleOpenModify(node)}>Config</Button>
+                            <Button variant="danger" className="text-[10px] py-1 px-4 uppercase h-8 font-bold" onClick={() => handleOpenRemove(node)}>Purge</Button>
                         </div>
                     )}
                 </div>
@@ -311,152 +311,79 @@ const Network: React.FC = () => {
         <div className="space-y-8 max-w-6xl mx-auto pb-20 animate-fade-in">
             <div className="flex flex-col md:flex-row md:items-end justify-between border-b border-gray-800 pb-8 gap-6">
                 <div>
-                    <h1 className="text-4xl font-extrabold text-white tracking-tight">Organization Network</h1>
-                    <p className="text-gray-400 mt-2 text-lg">Parent-to-child hierarchy management. Only parents can modify or terminate descendants.</p>
+                    <h1 className="text-4xl font-black text-white tracking-tight uppercase">Network Architecture</h1>
+                    <p className="text-gray-500 mt-2 font-medium">Administration of global distribution branches and authority protocols.</p>
                 </div>
                 <div className="w-full md:w-80">
-                    <Input 
-                        placeholder="Search name, ID, or email..." 
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="bg-gray-800 border-gray-700 focus:ring-primary"
-                    />
+                    <Input placeholder="Search hierarchy..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="bg-black/20" />
                 </div>
             </div>
 
-            <Card className="bg-gray-900/40 border-gray-800/60 shadow-2xl backdrop-blur-sm overflow-hidden">
+            <Card className="bg-gray-900/40 border-gray-800 overflow-hidden rounded-[2rem]">
                 <CardContent className="p-0">
-                    <div className="bg-gray-800/70 px-8 py-4 flex justify-between text-xs font-black text-gray-400 uppercase tracking-[0.2em] border-b border-gray-700/50">
-                        <span>Organization Structure</span>
-                        <span>Administrative Actions</span>
+                    <div className="bg-black/40 px-8 py-4 flex justify-between text-[10px] font-black text-gray-500 uppercase tracking-widest border-b border-white/5">
+                        <span>Node Hierarchy</span>
+                        <span>Authority Gateway</span>
                     </div>
-                    <div className="min-h-[500px] overflow-x-auto">
-                        <div className="min-w-[800px] p-4">
+                    <div className="min-h-[500px] overflow-x-auto custom-scrollbar">
+                        <div className="min-w-[800px] p-6">
                             {filteredTree.length === 0 ? (
-                                <div className="p-32 text-center">
-                                    <div className="text-gray-600 mb-4 flex justify-center">
-                                        <svg className="w-16 h-16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
-                                    </div>
-                                    <p className="text-gray-500 text-xl font-medium">No matches found for "{searchTerm}"</p>
-                                    <Button variant="secondary" className="mt-4" onClick={() => setSearchTerm('')}>Clear Search</Button>
-                                </div>
+                                <div className="p-32 text-center text-gray-600 font-bold uppercase tracking-widest text-xs opacity-50">Zero matches for current query.</div>
                             ) : filteredTree.map(rootNode => renderNode(rootNode))}
                         </div>
                     </div>
                 </CardContent>
             </Card>
 
-            <Modal 
-                isOpen={isRemovalModalOpen} 
-                onClose={() => setRemovalModalOpen(false)} 
-                title="Terminate Partnership" 
-                size="md"
-            >
-                <div className="space-y-6">
-                    <div className="p-4 bg-red-900/20 border border-red-500/30 rounded-lg">
-                        <p className="text-sm text-red-400 font-bold uppercase mb-2">Warning</p>
-                        <p className="text-sm text-gray-300">
-                            You are about to terminate access for <span className="text-white font-bold">{nodeToRemove?.name}</span>. 
-                            This action is permanent and will suspend all active releases and portal access for this node and its descendants.
-                        </p>
+            <Modal isOpen={isRemovalModalOpen} onClose={() => setRemovalModalOpen(false)} title="Terminate Link" size="md">
+                <div className="space-y-6 text-center py-4">
+                    <div className="w-20 h-20 bg-red-900/20 text-red-500 rounded-[2.5rem] flex items-center justify-center mx-auto mb-6 border border-red-500/20">
+                        <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
                     </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-400 uppercase tracking-widest">Reason for Removal (Mandatory)</label>
-                        <textarea 
-                            className="w-full bg-gray-900 border border-gray-700 rounded-lg p-3 text-white focus:ring-2 focus:ring-red-500 focus:outline-none min-h-[100px]"
-                            placeholder="Please provide a mandatory reason for termination (e.g., suspicious activity, contract ended)..."
-                            value={removalNote}
-                            onChange={(e) => setRemovalNote(e.target.value)}
-                        />
-                    </div>
-
-                    <div className="flex gap-4 pt-4">
-                        <Button variant="secondary" className="flex-1" onClick={() => setRemovalModalOpen(false)}>Cancel</Button>
-                        <Button 
-                            variant="danger" 
-                            className="flex-1" 
-                            disabled={!removalNote.trim() || isLoading}
-                            onClick={handleConfirmRemove}
-                        >
-                            {isLoading ? <Spinner /> : 'Confirm Termination'}
-                        </Button>
+                    <h3 className="text-2xl font-black text-white uppercase tracking-tight">Confirm Termination</h3>
+                    <p className="text-gray-500 font-medium">Purging <span className="text-white">{nodeToRemove?.name}</span> will suspend all child nodes and active sessions.</p>
+                    <textarea className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white text-sm focus:ring-1 focus:ring-red-500 outline-none min-h-[100px]" placeholder="Mandatory removal protocol note..." value={removalNote} onChange={(e) => setRemovalNote(e.target.value)} />
+                    <div className="flex gap-4">
+                        <Button variant="secondary" className="flex-1 font-black" onClick={() => setRemovalModalOpen(false)}>Abort</Button>
+                        <Button variant="danger" className="flex-1 font-black" disabled={!removalNote.trim() || isLoading} onClick={handleConfirmRemove}>Execute Purge</Button>
                     </div>
                 </div>
             </Modal>
 
-            <Modal
-                isOpen={isModifyModalOpen}
-                onClose={() => setModifyModalOpen(false)}
-                title={`Modify ${nodeToModify?.type} Details`}
-                size="2xl"
-            >
-                <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Input 
-                            label={`${nodeToModify?.type} Name`}
-                            value={modifyName}
-                            onChange={(e) => setModifyName(e.target.value)}
-                        />
-                        <Input 
-                            label="Contact Email"
-                            value={modifyEmail}
-                            onChange={(e) => setModifyEmail(e.target.value)}
-                        />
+            <Modal isOpen={isModifyModalOpen} onClose={() => setModifyModalOpen(false)} title="Configure Node Authority" size="2xl">
+                <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <Input label="Registry Name" value={modifyName} onChange={(e) => setModifyName(e.target.value)} />
+                        <Input label="Auth Endpoint" value={modifyEmail} onChange={(e) => setModifyEmail(e.target.value)} disabled />
                     </div>
 
-                    {nodeToModify?.type === 'Artist' && (
-                        <div className="space-y-4">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2">Artist Profile Details</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-1">Artist Type</label>
-                                    <select 
-                                        value={modifyArtistType} 
-                                        onChange={e => setModifyArtistType(e.target.value as ArtistType)}
-                                        className="w-full bg-gray-700 border border-gray-600 rounded-md px-3 py-2 text-white"
-                                    >
-                                        {Object.values(ArtistType).map(t => <option key={t} value={t}>{t}</option>)}
-                                    </select>
-                                </div>
-                                <Input label="Spotify ID" value={modifySpotifyId} onChange={e => setModifySpotifyId(e.target.value)} />
-                                <Input label="Apple Music ID" value={modifyAppleMusicId} onChange={e => setModifyAppleMusicId(e.target.value)} />
-                                <Input label="Instagram URL" value={modifyInstagramUrl} onChange={e => setModifyInstagramUrl(e.target.value)} />
-                            </div>
-                        </div>
-                    )}
-
                     {modifyPermissions && (
-                        <div className="space-y-4">
-                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-700 pb-2">Access Control</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-6">
+                            <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest border-b border-white/5 pb-3">Transmission Permissions</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {Object.keys(modifyPermissions).map(key => (
-                                    <label key={key} className="flex items-center justify-between bg-gray-900 p-3 rounded-lg border border-gray-700 hover:border-gray-500 cursor-pointer transition-colors">
-                                        <span className="text-sm text-gray-200 capitalize">{key.replace('can', '').replace(/([A-Z])/g, ' $1').trim()}</span>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={(modifyPermissions as any)[key]} 
-                                            onChange={e => setModifyPermissions(prev => prev ? ({ ...prev, [key]: e.target.checked }) : null)}
-                                            className="w-5 h-5 rounded border-gray-600 bg-gray-800 text-primary focus:ring-primary focus:ring-offset-gray-800"
-                                        />
+                                    <label key={key} className="flex items-center justify-between bg-black/40 p-5 rounded-2xl border border-gray-800 hover:border-primary/40 cursor-pointer transition-all group">
+                                        <div className="pr-4">
+                                            <span className="text-xs text-white font-black uppercase tracking-tight group-hover:text-primary transition-colors">
+                                                {key === 'canSubmitAlbums' ? 'Album Submission authority' : key.replace('can', '').replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <p className="text-[8px] text-gray-600 font-bold uppercase mt-1">
+                                                {key === 'canSubmitAlbums' ? 'Allows direct synchronization with distribution queue' : 'Managed functional access'}
+                                            </p>
+                                        </div>
+                                        <input type="checkbox" checked={(modifyPermissions as any)[key]} onChange={e => setModifyPermissions(prev => prev ? ({ ...prev, [key]: e.target.checked }) : null)} className="w-6 h-6 rounded-lg border-gray-700 bg-black text-primary focus:ring-primary" />
                                     </label>
                                 ))}
                             </div>
                         </div>
                     )}
 
-                    <div className="flex justify-end gap-3 pt-6 border-t border-gray-700">
+                    <div className="flex justify-end gap-3 pt-8 border-t border-white/5">
                         <Button variant="secondary" onClick={() => setModifyModalOpen(false)}>Discard</Button>
-                        <Button onClick={handleConfirmModify} disabled={isLoading}>
-                            {isLoading ? <Spinner /> : 'Save Changes'}
-                        </Button>
+                        <Button onClick={handleConfirmModify} disabled={isLoading}>{isLoading ? <Spinner /> : 'Sync Configuration'}</Button>
                     </div>
                 </div>
             </Modal>
-
-            <style>{`
-                .backdrop-blur-sm { backdrop-filter: blur(8px); }
-            `}</style>
         </div>
     );
 };

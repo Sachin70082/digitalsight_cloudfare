@@ -3,6 +3,7 @@ import React, { useState, createContext, useEffect, useCallback } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
+import { User as FirebaseUser } from 'firebase/auth';
 
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -26,14 +27,18 @@ type ToastType = 'success' | 'error' | 'info';
 
 type AppContextType = {
   user: User | null;
-  login: (email: string) => Promise<void>;
+  pendingFounder: FirebaseUser | null;
+  login: (email: string, password?: string) => Promise<void>;
+  completeFounderSetup: (name: string, designation: string) => Promise<void>;
   logout: () => void;
   showToast: (message: string, type?: ToastType) => void;
 };
 
 export const AppContext = createContext<AppContextType>({
   user: null,
+  pendingFounder: null,
   login: async () => {},
+  completeFounderSetup: async () => {},
   logout: () => {},
   showToast: () => {},
 });
@@ -65,29 +70,54 @@ const Toast: React.FC<{ message: string; type: ToastType; onClear: () => void }>
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [pendingFounder, setPendingFounder] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   useEffect(() => {
     const storedUser = sessionStorage.getItem('user');
     if (storedUser) {
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      // Ensure permissions exist even when hydrating from storage
+      if (parsedUser && !parsedUser.permissions) {
+          parsedUser.permissions = { canManageArtists: false, canManageReleases: false, canCreateSubLabels: false };
+      }
+      setUser(parsedUser);
     }
     setIsLoading(false);
   }, []);
 
-  const login = useCallback(async (email: string) => {
-    const foundUser = await api.login(email);
-    if (foundUser) {
-      setUser(foundUser);
-      sessionStorage.setItem('user', JSON.stringify(foundUser));
+  const login = useCallback(async (email: string, password?: string) => {
+    const result = await api.login(email, password);
+    
+    if (result && 'needsProfile' in result) {
+        setPendingFounder(result.firebaseUser);
+        return;
+    }
+
+    if (result && 'id' in result) {
+      const userResult = result as User;
+      setUser(userResult);
+      sessionStorage.setItem('user', JSON.stringify(userResult));
+      setPendingFounder(null);
     } else {
-      throw new Error('User not found.');
+      throw new Error('Authentication failed.');
     }
   }, []);
 
-  const logout = useCallback(() => {
+  const completeFounderSetup = useCallback(async (name: string, designation: string) => {
+      if (!pendingFounder) return;
+      
+      const newUser = await api.createMasterProfile(pendingFounder.uid, { name, designation });
+      setUser(newUser);
+      sessionStorage.setItem('user', JSON.stringify(newUser));
+      setPendingFounder(null);
+  }, [pendingFounder]);
+
+  const logout = useCallback(async () => {
+    await api.logout();
     setUser(null);
+    setPendingFounder(null);
     sessionStorage.removeItem('user');
   }, []);
 
@@ -100,7 +130,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <AppContext.Provider value={{ user, login, logout, showToast }}>
+    <AppContext.Provider value={{ user, pendingFounder, login, completeFounderSetup, logout, showToast }}>
       <HashRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
         <Routes>
@@ -115,19 +145,19 @@ const App: React.FC = () => {
               <Route path="releases" element={<ReleaseList />} />
               <Route path="releases/:releaseId" element={<ReleaseDetail />} />
               
-              {(user.role === UserRole.LABEL_ADMIN || user.permissions.canCreateSubLabels) && (
+              {(user.role === UserRole.LABEL_ADMIN || user.permissions?.canCreateSubLabels) && (
                 <Route path="sub-labels" element={<SubLabels />} />
               )}
 
-              {(user.role === UserRole.OWNER || user.permissions.canManageNetwork || user.permissions.canCreateSubLabels) && (
+              {(user.role === UserRole.OWNER || user.permissions?.canManageNetwork || user.permissions?.canCreateSubLabels) && (
                 <Route path="network" element={<Network />} />
               )}
 
-              {(user.role !== UserRole.ARTIST || user.permissions.canManageArtists) && (
+              {(user.role !== UserRole.ARTIST || user.permissions?.canManageArtists) && (
                 <Route path="artists" element={<Artists />} />
               )}
 
-              {(user.role === UserRole.OWNER || user.permissions.canManageEmployees) && (
+              {(user.role === UserRole.OWNER || user.permissions?.canManageEmployees) && (
                 <Route path="employees" element={<Employees />} />
               )}
 
@@ -148,7 +178,7 @@ const App: React.FC = () => {
                 <Route path="release/:releaseId" element={<ReleaseReview />} />
               )}
 
-              {user.role === UserRole.OWNER && (
+              {(user.role === UserRole.OWNER || user.permissions?.canOnboardLabels) && (
                 <Route path="labels" element={<Labels />} />
               )}
               

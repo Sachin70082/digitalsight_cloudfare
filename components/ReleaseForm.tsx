@@ -18,6 +18,10 @@ interface ReleaseFormProps {
 
 type FormData = Omit<Release, 'createdAt' | 'updatedAt' | 'labelId'>;
 
+const sanitizeFilename = (name: string) => {
+    return name.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+};
+
 const emptyTrack = (num: number): Track => ({
     id: `tr-${Date.now()}-${num}`,
     trackNumber: num,
@@ -35,12 +39,15 @@ const emptyTrack = (num: number): Track => ({
     lyricist: ''
 });
 
+const GENRES = ["Pop", "Hip-Hop", "Rock", "Electronic", "Classical", "Jazz", "World", "Folk", "Bollywood", "Devotional", "Regional"];
+const MOODS = ["Happy", "Sad", "Energetic", "Relaxed", "Dark", "Romantic", "Epic", "Chill"];
+const LANGUAGES = ["English", "Hindi", "Punjabi", "Spanish", "French", "German", "Japanese", "Tamil", "Telugu", "Marathi"];
+
 const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialReleaseId }) => {
     const { user } = useContext(AppContext);
     const [step, setStep] = useState(1);
     const [isLoading, setIsLoading] = useState(!!initialReleaseId);
     
-    // Submission Progress State
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [progressStatus, setProgressStatus] = useState('');
@@ -49,7 +56,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
 
-    // Staging Files for Firebase
     const [stagedArtwork, setStagedArtwork] = useState<File | null>(null);
     const [stagedAudio, setStagedAudio] = useState<Record<number, File>>({});
 
@@ -62,7 +68,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         featuredArtistIds: [],
         upc: '',
         catalogueNumber: '',
-        releaseDate: '',
+        releaseDate: new Date().toISOString().split('T')[0],
         artworkUrl: '', 
         artworkFileName: '',
         pLine: '',
@@ -70,10 +76,10 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         description: '',
         explicit: false,
         status: ReleaseStatus.DRAFT,
-        genre: '',
+        genre: GENRES[0],
         subGenre: '',
-        mood: '',
-        language: '',
+        mood: MOODS[0],
+        language: LANGUAGES[0],
         publisher: '',
         filmName: '',
         filmDirector: '',
@@ -85,8 +91,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         notes: []
     });
 
-    const isCorrectionFlow = formData.status === ReleaseStatus.NEEDS_INFO;
-
     useEffect(() => {
         const loadInitialData = async () => {
             if (user?.labelId) {
@@ -95,7 +99,15 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             }
             if (initialReleaseId) {
                 const existing = await api.getRelease(initialReleaseId);
-                if (existing) setFormData({ ...existing });
+                if (existing) {
+                    setFormData({ 
+                        ...existing,
+                        tracks: existing.tracks || [emptyTrack(1)],
+                        notes: existing.notes || [],
+                        primaryArtistIds: existing.primaryArtistIds || [],
+                        featuredArtistIds: existing.featuredArtistIds || []
+                    });
+                }
                 setIsLoading(false);
             } else {
                 setFormData(prev => ({ ...prev, tracks: [emptyTrack(1)] }));
@@ -109,18 +121,22 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     };
 
     const handleTrackChange = (index: number, field: keyof Track, value: any) => {
-        const newTracks = [...formData.tracks];
-        (newTracks[index] as any)[field] = value;
-        handleChange('tracks', newTracks);
+        const newTracks = [...(formData.tracks || [])];
+        if (newTracks[index]) {
+            (newTracks[index] as any)[field] = value;
+            handleChange('tracks', newTracks);
+        }
     };
 
     const addTrack = () => {
-        const newTrackNumber = formData.tracks.length + 1;
-        handleChange('tracks', [...formData.tracks, emptyTrack(newTrackNumber)]);
+        const currentTracks = formData.tracks || [];
+        const newTrackNumber = currentTracks.length + 1;
+        handleChange('tracks', [...currentTracks, emptyTrack(newTrackNumber)]);
     };
 
     const removeTrack = (index: number) => {
-        const newTracks = formData.tracks.filter((_, i) => i !== index);
+        const currentTracks = formData.tracks || [];
+        const newTracks = currentTracks.filter((_, i) => i !== index);
         newTracks.forEach((t, i) => t.trackNumber = i + 1);
         handleChange('tracks', newTracks);
     };
@@ -138,11 +154,12 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             const duration = Math.round(audioBuffer.duration);
 
             setStagedAudio(prev => ({ ...prev, [index]: file }));
+            
             handleTrackChange(index, 'audioFileName', file.name);
             handleTrackChange(index, 'duration', duration);
-            handleTrackChange(index, 'audioUrl', 'staged'); // Marker for UI
+            handleTrackChange(index, 'audioUrl', 'staged'); 
             
-            if (!formData.tracks[index].title) {
+            if (formData.tracks?.[index] && !formData.tracks[index].title) {
                 handleTrackChange(index, 'title', file.name.replace('.wav', ''));
             }
         } catch (err: any) {
@@ -158,7 +175,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         setStagedArtwork(file);
         setFormData(prev => ({
             ...prev,
-            artworkUrl: 'staged', // Marker for UI
+            artworkUrl: 'staged',
             artworkFileName: file.name
         }));
     };
@@ -167,12 +184,15 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         setIsSubmitting(true);
         const releaseId = formData.id;
         let finalArtworkUrl = formData.artworkUrl;
-        const updatedTracks = [...formData.tracks];
+        const updatedTracks = [...(formData.tracks || [])];
+        const safeReleaseTitle = sanitizeFilename(formData.title || 'untitled_release');
 
-        // 1. Upload Artwork
         if (stagedArtwork) {
-            setProgressStatus('Uploading Artwork...');
-            const artRef = ref(storage, `releases/${releaseId}/artwork/${stagedArtwork.name}`);
+            setProgressStatus(`Renaming & Uploading Artwork...`);
+            const ext = stagedArtwork.name.split('.').pop() || 'jpg';
+            const newArtName = `${safeReleaseTitle}_cover.${ext}`;
+            const artRef = ref(storage, `releases/${releaseId}/artwork/${newArtName}`);
+            
             const uploadTask = uploadBytesResumable(artRef, stagedArtwork);
             await new Promise((resolve, reject) => {
                 uploadTask.on('state_changed', 
@@ -186,22 +206,31 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             });
         }
 
-        // 2. Upload Audio Tracks
         for (let i = 0; i < updatedTracks.length; i++) {
             const file = stagedAudio[i];
             if (file) {
-                setProgressStatus(`Uploading Track ${i+1}: ${file.name}`);
-                const audioRef = ref(storage, `releases/${releaseId}/audio/${updatedTracks[i].id}/${file.name}`);
+                const track = updatedTracks[i];
+                const safeTrackTitle = sanitizeFilename(track.title || `track_${track.trackNumber}`);
+                const newAudioName = `${safeTrackTitle}.wav`;
+                
+                setProgressStatus(`Uploading Track ${track.trackNumber}...`);
+                
+                const audioRef = ref(storage, `releases/${releaseId}/audio/${track.id}/${newAudioName}`);
                 const uploadTask = uploadBytesResumable(audioRef, file);
+                
                 await new Promise((resolve, reject) => {
                     uploadTask.on('state_changed', 
                         (snap) => {
-                            const trackProgress = (snap.bytesTransferred / snap.totalBytes) * (80 / updatedTracks.length);
-                            setUploadProgress(Math.round(20 + (i * (80 / updatedTracks.length)) + trackProgress));
+                            const totalAudioSteps = 80;
+                            const trackWeight = totalAudioSteps / updatedTracks.length;
+                            const currentTrackBase = 20 + (i * trackWeight);
+                            const trackProgress = (snap.bytesTransferred / snap.totalBytes) * trackWeight;
+                            setUploadProgress(Math.round(currentTrackBase + trackProgress));
                         },
                         reject,
                         async () => {
                             updatedTracks[i].audioUrl = await getDownloadURL(audioRef);
+                            updatedTracks[i].audioFileName = newAudioName;
                             resolve(null);
                         }
                     );
@@ -209,20 +238,25 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             }
         }
 
-        setProgressStatus('Finalizing Record...');
+        setProgressStatus('Finalizing Entry...');
         setUploadProgress(100);
         return { artworkUrl: finalArtworkUrl, tracks: updatedTracks };
     };
 
-    const handleSubmit = async () => {
+    const handleAction = async (isSubmission: boolean) => {
         if (!user || !user.labelId) return;
-        if (!formData.artworkUrl) { alert('Cover art is mandatory.'); setStep(4); return; }
-        if (formData.tracks.some(t => !t.audioUrl)) { alert('Audio masters missing.'); setStep(3); return; }
+        if (!formData.title) { alert('Title is mandatory.'); setStep(1); return; }
+        
+        // Artwork and Tracks only mandatory for final submission
+        if (isSubmission) {
+            if (!formData.artworkUrl) { alert('Cover art is mandatory for submission.'); setStep(6); return; }
+            if ((formData.tracks || []).some(t => !t.audioUrl)) { alert('All tracks must have masters for submission.'); setStep(5); return; }
+        }
         
         try {
             const { artworkUrl, tracks } = await performUploads();
-
             const newNotes = [...(formData.notes || [])];
+            
             if (submissionNote.trim()) {
                 newNotes.unshift({
                     id: `note-${Date.now()}`,
@@ -233,187 +267,182 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 });
             }
             
-            const submittedData = { 
+            const finalData = { 
                 ...formData, 
-                artworkUrl,
-                tracks,
-                status: ReleaseStatus.PENDING,
-                notes: newNotes
+                artworkUrl: artworkUrl || formData.artworkUrl,
+                tracks: tracks || formData.tracks,
+                status: isSubmission ? ReleaseStatus.PENDING : ReleaseStatus.DRAFT,
+                notes: newNotes,
+                artworkFileName: sanitizeFilename(formData.title) + '_cover'
             };
 
-            const result = await api.addRelease({ ...submittedData, labelId: user.labelId });
+            const result = await api.addRelease({ ...finalData, labelId: user.labelId });
             onSave(result);
             onClose();
         } catch (error: any) {
-            alert("Submission error: " + error.message);
+            alert("Transmission Error: " + error.message);
             setIsSubmitting(false);
         }
     };
 
     if (isLoading) return <div className="py-20 flex justify-center"><Spinner /></div>;
+
+    const canSubmit = user?.permissions?.canSubmitAlbums || user?.role === 'Owner' || user?.role === 'Employee';
     
     return (
-        <div className="space-y-6 relative min-h-[500px]">
+        <div className="space-y-6 relative min-h-[600px]">
             {isSubmitting && (
                 <div className="absolute inset-0 z-[100] bg-gray-900/95 backdrop-blur-xl flex flex-col items-center justify-center p-12 text-center animate-fade-in rounded-3xl">
                     <div className="w-full max-w-sm space-y-8">
                         <div className="relative">
-                            <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full animate-pulse-slow"></div>
-                            <div className="relative flex justify-center">
-                                {uploadProgress < 100 ? (
-                                    <div className="relative">
-                                        <Spinner className="w-16 h-16 border-primary border-t-transparent" />
-                                        <MusicIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-primary" />
-                                    </div>
-                                ) : (
-                                    <CheckCircleIcon className="w-16 h-16 text-primary animate-scale-in" />
-                                )}
-                            </div>
+                            <Spinner className="w-16 h-16 border-primary border-t-transparent mx-auto" />
+                            <MusicIcon className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-primary" />
                         </div>
                         <div className="space-y-3">
-                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">
-                                {uploadProgress < 100 ? 'Deploying to Firebase' : 'Sync Complete'}
-                            </h3>
-                            <p className="text-xs text-gray-500 font-mono tracking-widest uppercase h-4">{progressStatus}</p>
+                            <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Vault Transmission</h3>
+                            <p className="text-[10px] text-gray-500 font-mono tracking-widest uppercase truncate">{progressStatus}</p>
                         </div>
-                        <div className="space-y-4">
-                            <div className="relative h-1.5 w-full bg-gray-800 rounded-full overflow-hidden shadow-inner">
-                                <div 
-                                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-700 ease-out shadow-[0_0_15px_rgba(29,185,84,0.6)]" 
-                                    style={{ width: `${uploadProgress}%` }}
-                                />
-                            </div>
-                            <div className="flex justify-between items-center text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                                <span>{uploadProgress}% Streamed</span>
-                                <span>Vault Encrypted</span>
-                            </div>
+                        <div className="relative h-1.5 w-full bg-gray-800 rounded-full overflow-hidden">
+                            <div 
+                                className="absolute top-0 left-0 h-full bg-primary transition-all duration-700 ease-out shadow-[0_0_15px_rgba(29,185,84,0.6)]" 
+                                style={{ width: `${uploadProgress}%` }}
+                            />
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Stepper Header */}
-            <div className="flex justify-between items-center px-4 mb-8">
-                {['General', 'Metadata', 'Tracks', 'Artwork', 'Review'].map((name, index) => (
+            <div className="flex justify-between items-center px-4 mb-8 overflow-x-auto pb-4 custom-scrollbar">
+                {['General', 'Commercial', 'Genre', 'Film', 'Tracks', 'Artwork', 'Review'].map((name, index) => (
                     <React.Fragment key={name}>
-                        <div className="flex flex-col items-center gap-2 group cursor-pointer" onClick={() => !isSubmitting && setStep(index + 1)}>
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs transition-all duration-300 ${
-                                step > index + 1 ? 'bg-primary text-black shadow-[0_0_15px_rgba(29,185,84,0.3)]' : 
-                                (step === index + 1 ? 'bg-primary text-black scale-110 shadow-lg' : 'bg-gray-800 text-gray-600')
+                        <div className="flex flex-col items-center gap-2 cursor-pointer min-w-[70px]" onClick={() => !isSubmitting && setStep(index + 1)}>
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] transition-all duration-300 ${
+                                step > index + 1 ? 'bg-primary text-black' : 
+                                (step === index + 1 ? 'bg-primary text-black scale-110' : 'bg-gray-800 text-gray-600')
                             }`}>
-                                {step > index + 1 ? <CheckCircleIcon className="w-5 h-5" /> : index + 1}
+                                {step > index + 1 ? '✓' : index + 1}
                             </div>
-                            <span className={`text-[9px] uppercase font-black tracking-widest transition-colors ${step >= index + 1 ? 'text-white' : 'text-gray-600'}`}>{name}</span>
+                            <span className={`text-[8px] uppercase font-black tracking-widest ${step >= index + 1 ? 'text-white' : 'text-gray-600'}`}>{name}</span>
                         </div>
-                        {index < 4 && <div className={`flex-1 h-[2px] mx-4 rounded-full transition-colors duration-500 ${step > index + 1 ? 'bg-primary/50' : 'bg-gray-800'}`}></div>}
+                        {index < 6 && <div className={`flex-1 h-[1px] min-w-[20px] mx-2 ${step > index + 1 ? 'bg-primary/50' : 'bg-gray-800'}`}></div>}
                     </React.Fragment>
                 ))}
             </div>
             
-            <div className="max-h-[60vh] overflow-y-auto px-1 custom-scrollbar pr-4">
+            <div className="max-h-[60vh] overflow-y-auto px-1 custom-scrollbar pr-4 pb-10">
                 {step === 1 && (
                     <div className="space-y-6 animate-fade-in">
+                        <h3 className="text-xl font-bold text-white mb-4">Identity Meta</h3>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Input label="Album Title" placeholder="e.g. Midnight City" value={formData.title} onChange={e => handleChange('title', e.target.value)} required />
+                            <Input label="Session Title" placeholder="e.g. Neon Nights" value={formData.title} onChange={e => handleChange('title', e.target.value)} required />
                              <div>
-                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Configuration</label>
+                                <label className="block text-[10px] font-black text-gray-500 uppercase tracking-widest mb-2">Release Type</label>
                                 <select 
                                     value={formData.releaseType} 
                                     onChange={e => handleChange('releaseType', e.target.value as ReleaseType)}
-                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-sm text-white focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 text-sm text-white outline-none"
                                 >
                                     {Object.values(ReleaseType).map(t => <option key={t} value={t}>{t}</option>)}
                                 </select>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
-                            <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
+                            <ArtistSelector label="Primary Node(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
+                            <ArtistSelector label="Featured Node(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
                         </div>
                          <div className="relative">
-                            <Textarea label="Liner Notes / Description" rows={4} placeholder="Tell the story behind this release..." value={formData.description} onChange={e => handleChange('description', e.target.value)} />
+                            <Textarea label="Production Description" rows={4} placeholder="Describe this session..." value={formData.description} onChange={e => handleChange('description', e.target.value)} />
                             <Button type="button" onClick={async () => {
-                                const artist = labelArtists.find(a => a.id === formData.primaryArtistIds[0]);
-                                if (!formData.title || !artist) return alert('Enter Title and Artist');
+                                const primaryIds = formData.primaryArtistIds || [];
+                                const artist = labelArtists.find(a => a.id === primaryIds[0]);
+                                if (!formData.title || !artist) return alert('Enter Title and Primary Artist');
                                 setIsGenerating(true);
                                 const desc = await generateReleaseDescription(artist.name, formData.title);
                                 handleChange('description', desc);
                                 setIsGenerating(false);
-                            }} disabled={isGenerating} className="absolute bottom-3 right-3 text-[10px] py-2 px-4 shadow-xl">
-                                {isGenerating ? <Spinner className="h-3 w-3"/> : <><SparklesIcon className="w-3 h-3 mr-2 inline"/> AI Studio</>}
+                            }} disabled={isGenerating} className="absolute bottom-3 right-3 text-[9px] py-1.5 px-3">
+                                {isGenerating ? <Spinner className="h-3 w-3"/> : 'AI Synthesis'}
                             </Button>
                         </div>
                     </div>
                 )}
 
-                {step === 3 && (
+                {step === 5 && (
                     <div className="space-y-8 animate-fade-in">
-                        {formData.tracks.map((track, index) => (
-                             <div key={track.id} className="group bg-gray-800/20 p-8 rounded-3xl border border-gray-800/60 shadow-inner space-y-8 transition-all hover:bg-gray-800/40">
+                        <div className="flex justify-between items-center mb-4">
+                             <h3 className="text-xl font-bold text-white">Track Architecture</h3>
+                             <Button onClick={addTrack} variant="secondary" className="text-[10px] py-2">Add Segment</Button>
+                        </div>
+                        {(formData.tracks || []).map((track, index) => (
+                             <div key={track.id} className="group bg-gray-800/30 p-6 rounded-2xl border border-gray-800/60 space-y-6">
                                 <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-2xl bg-gray-900 flex items-center justify-center text-[12px] font-black text-primary border border-primary/20 shadow-lg">#{track.trackNumber}</div>
-                                        <div>
-                                            <h4 className="font-black text-white text-lg tracking-tight uppercase italic">Track Module</h4>
-                                        </div>
-                                    </div>
-                                    {formData.tracks.length > 1 && (
-                                        <button onClick={() => removeTrack(index)} className="w-10 h-10 rounded-xl bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white transition-all flex items-center justify-center">
-                                            <XCircleIcon className="w-6 h-6"/>
-                                        </button>
+                                    <div className="w-8 h-8 rounded bg-gray-900 flex items-center justify-center text-xs font-black text-primary border border-primary/10">#{track.trackNumber}</div>
+                                    {formData.tracks && formData.tracks.length > 1 && (
+                                        <button onClick={() => removeTrack(index)} className="text-gray-600 hover:text-red-500 transition-colors"><XCircleIcon className="w-5 h-5"/></button>
                                     )}
                                 </div>
                                 
-                                <div className={`border-2 border-dashed rounded-2xl px-8 py-6 relative transition-all duration-500 ${track.audioUrl ? 'bg-primary/5 border-primary/30' : 'bg-black/40 border-gray-700/40 hover:border-gray-500'}`}>
-                                    {track.audioUrl ? (
-                                        <div className="flex items-center justify-between w-full">
-                                            <div className="flex items-center gap-6 min-w-0">
-                                                <div className="w-14 h-14 bg-primary/20 rounded-2xl flex items-center justify-center flex-shrink-0 animate-scale-in border border-primary/20 shadow-[0_0_20px_rgba(29,185,84,0.2)]">
-                                                    <MusicIcon className="text-primary w-7 h-7" />
-                                                </div>
+                                <div className={`border-2 border-dashed rounded-xl p-6 relative transition-colors ${track.audioUrl ? 'bg-primary/5 border-primary/20' : 'bg-black/20 border-gray-700'}`}>
+                                    {track.audioUrl && track.audioUrl !== 'staged' ? (
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4">
+                                                <MusicIcon className="text-primary w-6 h-6" />
                                                 <div className="min-w-0">
-                                                    <p className="text-sm text-white truncate font-black tracking-tight">{track.audioFileName}</p>
-                                                    <span className="px-2 py-0.5 bg-primary text-black text-[9px] font-black uppercase rounded shadow-sm">Firebase Staged</span>
+                                                    <span className="text-xs text-white font-bold truncate block">{track.audioFileName}</span>
+                                                    <span className="text-[9px] text-gray-500 uppercase font-black">Active Stream Master</span>
                                                 </div>
                                             </div>
-                                            <Button variant="secondary" className="text-[10px] px-5 py-3 uppercase font-black tracking-widest rounded-xl" onClick={() => handleTrackChange(index, 'audioUrl', '')}>Replace Master</Button>
+                                            <Button variant="secondary" className="text-[9px] py-1" onClick={() => handleTrackChange(index, 'audioUrl', '')}>Replace</Button>
+                                        </div>
+                                    ) : track.audioUrl === 'staged' ? (
+                                        <div className="flex items-center gap-4 text-primary">
+                                            <UploadIcon className="w-5 h-5" />
+                                            <span className="text-xs font-black uppercase">Asset Ready for Sync</span>
                                         </div>
                                     ) : (
-                                        <div className="flex flex-col items-center justify-center gap-3 py-4 group/drop cursor-pointer">
-                                            <div className="w-12 h-12 bg-gray-800 rounded-full flex items-center justify-center transition-all group-hover/drop:scale-110 group-hover/drop:bg-primary/20">
-                                                <UploadIcon className="w-6 h-6 text-gray-500 group-hover/drop:text-primary transition-colors" />
-                                            </div>
-                                            <div className="text-center">
-                                                <p className="text-[11px] text-gray-400 uppercase font-black tracking-[0.2em] group-hover/drop:text-white transition-colors">Stage High-Res WAV Master</p>
-                                            </div>
+                                        <div className="text-center py-2">
+                                            <UploadIcon className="w-5 h-5 text-gray-600 mx-auto mb-2" />
+                                            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Select WAV Source</p>
                                             <input type="file" accept=".wav" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleAudioSelect(f, index); }} />
                                         </div>
                                     )}
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-                                    <Input label="Track Title" value={track.title} onChange={e => handleTrackChange(index, 'title', e.target.value)} className="text-sm rounded-xl bg-gray-900/50 border-gray-800" />
-                                    <Input label="ISRC" value={track.isrc} onChange={e => handleTrackChange(index, 'isrc', e.target.value)} placeholder="US-XXX-XX-XXXXX" className="text-sm font-mono rounded-xl bg-gray-900/50 border-gray-800" />
                                 </div>
                              </div>
                         ))}
                     </div>
                 )}
 
-                {step === 4 && (
-                    <div className="flex flex-col items-center justify-center h-full animate-fade-in py-12">
-                        <div className="relative w-80 h-80 border-2 border-dashed border-gray-700/50 rounded-3xl flex items-center justify-center overflow-hidden bg-black/40 shadow-2xl group transition-all hover:border-primary/40">
+                {step === 6 && (
+                    <div className="flex flex-col items-center justify-center animate-fade-in py-10">
+                        <h3 className="text-xl font-bold text-white mb-6">Artwork Ingestion</h3>
+                        <div className="relative w-72 h-72 border-2 border-dashed border-gray-700 rounded-2xl flex items-center justify-center overflow-hidden bg-black/40 group hover:border-primary/40 transition-all">
                             {formData.artworkUrl ? (
-                                <img src={stagedArtwork ? URL.createObjectURL(stagedArtwork) : formData.artworkUrl} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Album Cover" />
+                                <img src={stagedArtwork ? URL.createObjectURL(stagedArtwork) : formData.artworkUrl} className="w-full h-full object-cover" alt="Cover Art" />
                             ) : (
-                                <div className="text-center p-8">
-                                    <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mx-auto mb-6 text-gray-600 group-hover:text-primary transition-colors">
-                                        <UploadIcon className="h-8 w-8" />
-                                    </div>
-                                    <p className="text-xs text-gray-500 uppercase font-black tracking-widest">Select Cover Art</p>
+                                <div className="text-center">
+                                    <UploadIcon className="h-8 w-8 mx-auto mb-4 text-gray-600" />
+                                    <p className="text-[10px] text-gray-500 uppercase font-black tracking-widest">Standard HQ Source</p>
                                 </div>
                             )}
                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleArtworkSelect(f); }} />
+                        </div>
+                    </div>
+                )}
+
+                {step === 7 && (
+                    <div className="space-y-6 animate-fade-in">
+                        <div className="bg-primary/10 p-6 rounded-2xl border border-primary/20 flex items-center gap-4">
+                            <div className="w-16 h-16 rounded-xl overflow-hidden shadow-lg flex-shrink-0 bg-black">
+                                <img src={stagedArtwork ? URL.createObjectURL(stagedArtwork) : (formData.artworkUrl || '')} className="w-full h-full object-cover" loading="lazy" alt="" />
+                            </div>
+                            <div>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter">{formData.title}</h3>
+                                <p className="text-sm text-primary font-bold uppercase tracking-widest">{formData.releaseType} • Authority Audit Required</p>
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                             <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Journal Memo for Auditors</label>
+                             <Textarea placeholder="Context for the quality control team..." value={submissionNote} onChange={e => setSubmissionNote(e.target.value)} rows={3} />
                         </div>
                     </div>
                 )}
@@ -421,12 +450,22 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
 
             <div className="flex justify-between items-center pt-8 border-t border-gray-800 bg-gray-900/50 -mx-6 px-6 pb-2 sticky bottom-0 backdrop-blur-md rounded-b-3xl">
                 <Button variant="secondary" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || isSubmitting} className="px-8 font-black uppercase text-[10px] tracking-widest">Previous</Button>
-                {step < 5 ? (
+                {step < 7 ? (
                     <Button onClick={() => setStep(s => s + 1)} disabled={isSubmitting} className="px-10 font-black uppercase text-[10px] tracking-widest">Continue</Button>
                 ) : (
-                    <Button onClick={handleSubmit} disabled={isSubmitting} className="px-12 py-4 font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/30">
-                        {isSubmitting ? 'Syncing...' : 'Push to Production Storage'}
-                    </Button>
+                    <div className="flex gap-4">
+                        <Button onClick={() => handleAction(false)} variant="secondary" disabled={isSubmitting} className="px-8 py-4 font-black uppercase text-[10px] tracking-widest">Save to Archive</Button>
+                        {canSubmit ? (
+                            <Button onClick={() => handleAction(true)} disabled={isSubmitting} className="px-12 py-4 font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/30">
+                                Synchronize Ingest
+                            </Button>
+                        ) : (
+                            <div className="flex flex-col items-end">
+                                <span className="text-[8px] text-yellow-500 font-black uppercase tracking-[0.2em] mb-1">Restricted Action</span>
+                                <Button disabled className="px-12 py-4 font-black uppercase text-xs opacity-50 cursor-not-allowed">Submission Locked</Button>
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

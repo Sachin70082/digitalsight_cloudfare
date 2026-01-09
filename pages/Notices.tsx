@@ -1,3 +1,4 @@
+
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
@@ -172,11 +173,11 @@ const Notices: React.FC = () => {
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 border-t border-white/5 pt-6">
                                 <div className="flex items-center gap-4">
                                     <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center font-bold text-xl text-primary border border-white/10">
-                                        {notice.authorName.charAt(0)}
+                                        {(notice.authorName || 'A').charAt(0)}
                                     </div>
                                     <div>
-                                        <p className="text-sm font-bold text-white uppercase tracking-wider">{notice.authorName}</p>
-                                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{notice.authorDesignation}</p>
+                                        <p className="text-sm font-bold text-white uppercase tracking-wider">{notice.authorName || 'Anonymous'}</p>
+                                        <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest">{notice.authorDesignation || 'System'}</p>
                                     </div>
                                 </div>
                                 <div className="text-right">
