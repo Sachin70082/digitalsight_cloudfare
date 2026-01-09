@@ -20,6 +20,7 @@ import CorrectionQueue from './pages/CorrectionQueue';
 import Accounting from './pages/Accounting';
 import Support from './pages/Support';
 import FAQ from './pages/FAQ';
+import Labels from './pages/Labels';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -147,7 +148,9 @@ const App: React.FC = () => {
                 <Route path="release/:releaseId" element={<ReleaseReview />} />
               )}
 
-              <Route path="labels" element={<div className="text-white p-4">Label Management Coming Soon...</div>} />
+              {user.role === UserRole.OWNER && (
+                <Route path="labels" element={<Labels />} />
+              )}
               
               <Route path="*" element={<Navigate to="/" />} />
             </Route>
