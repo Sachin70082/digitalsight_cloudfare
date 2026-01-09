@@ -1,6 +1,6 @@
 
 import React, { useState, createContext, useEffect, useCallback } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
 import { User as FirebaseUser } from 'firebase/auth';
@@ -131,7 +131,7 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={{ user, pendingFounder, login, completeFounderSetup, logout, showToast }}>
-      <HashRouter>
+      <BrowserRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
         <Routes>
           {!user ? (
@@ -186,7 +186,7 @@ const App: React.FC = () => {
             </Route>
           )}
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </AppContext.Provider>
   );
 };
