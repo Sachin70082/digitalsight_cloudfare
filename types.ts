@@ -70,7 +70,9 @@ export interface User {
   role: UserRole;
   designation?: EmployeeDesignation | string; // For employees and owner
   labelId?: string; // Only for Label users
+  labelName?: string; // Cache for display
   artistId?: string; // Only for Artist users
+  artistName?: string; // Cache for display
   permissions: UserPermissions;
 }
 
@@ -85,8 +87,19 @@ export interface InteractionNote {
 export interface Label {
   id: string;
   name: string;
-  parentLabelId?: string; // Link to parent label
-  ownerId: string; // The User ID who created it
+  parentLabelId?: string; 
+  ownerId: string;
+  
+  // Metadata fields
+  address?: string;
+  city?: string;
+  country?: string;
+  taxId?: string;
+  website?: string;
+  phone?: string;
+  revenueShare?: number; // e.g., 70 for 70% to label
+  status?: 'Active' | 'Suspended';
+  createdAt?: string;
 }
 
 export enum ArtistType {

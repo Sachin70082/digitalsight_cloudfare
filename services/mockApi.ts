@@ -3,7 +3,7 @@ import { User, UserRole, Label, Artist, Release, ReleaseStatus, UserPermissions,
 
 // Persistence Keys
 const STORAGE_KEYS = {
-    RELEASES: 'distro_pro_releases',
+    RERELEASES: 'distro_pro_releases',
     ARTISTS: 'distro_pro_artists',
     LABELS: 'distro_pro_labels',
     NOTICES: 'distro_pro_notices',
@@ -25,9 +25,9 @@ const defaultUsers: User[] = [
 
 let users: User[] = load(STORAGE_KEYS.USERS, defaultUsers);
 let notices: Notice[] = load(STORAGE_KEYS.NOTICES, []);
-let labels: Label[] = load(STORAGE_KEYS.LABELS, [{ id: 'label-1', name: 'Future Sound Records', ownerId: 'user-label1' }]);
+let labels: Label[] = load(STORAGE_KEYS.LABELS, [{ id: 'label-1', name: 'Future Sound Records', ownerId: 'user-label1', revenueShare: 70, status: 'Active', country: 'US' }]);
 let artists: Artist[] = load(STORAGE_KEYS.ARTISTS, []);
-let releases: Release[] = load(STORAGE_KEYS.RELEASES, []);
+let releases: Release[] = load(STORAGE_KEYS.RERELEASES, []);
 let revenue: RevenueEntry[] = load(STORAGE_KEYS.REVENUE, []);
 
 // Seed some revenue data if empty for demo purposes
@@ -52,7 +52,7 @@ if (revenue.length === 0) {
 
 // Save Helper
 const persist = () => {
-    localStorage.setItem(STORAGE_KEYS.RELEASES, JSON.stringify(releases));
+    localStorage.setItem(STORAGE_KEYS.RERELEASES, JSON.stringify(releases));
     localStorage.setItem(STORAGE_KEYS.ARTISTS, JSON.stringify(artists));
     localStorage.setItem(STORAGE_KEYS.LABELS, JSON.stringify(labels));
     localStorage.setItem(STORAGE_KEYS.NOTICES, JSON.stringify(notices));
@@ -94,7 +94,20 @@ const getArtistLockReason = (artistId: string): { isLocked: boolean, releaseTitl
 
 export const api = {
   login: async (email: string): Promise<User | undefined> => {
-    return users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    if (!user) return undefined;
+
+    // Attach Label/Artist name for UI display
+    if (user.labelId) {
+        const label = labels.find(l => l.id === user.labelId);
+        if (label) user.labelName = label.name;
+    }
+    if (user.artistId) {
+        const artist = artists.find(a => a.id === user.artistId);
+        if (artist) user.artistName = artist.name;
+    }
+
+    return user;
   },
 
   getLabels: async (): Promise<Label[]> => [...labels],
@@ -107,6 +120,12 @@ export const api = {
     const label = labels.find(l => l.id === id);
     if (!label) throw new Error('Label not found');
     label.name = name;
+    
+    // Also update cached labelName in users
+    users.forEach(u => {
+        if (u.labelId === id) u.labelName = name;
+    });
+    
     persist();
     return label;
   },
@@ -129,7 +148,7 @@ export const api = {
   },
 
   getLabelAdmin: async (labelId: string): Promise<User | undefined> => {
-    return users.find(u => u.labelId === labelId && u.role === UserRole.LABEL_ADMIN);
+    return users.find(u => u.labelId === labelId && (u.role === UserRole.LABEL_ADMIN || u.role === UserRole.SUB_LABEL_ADMIN));
   },
 
   getEmployees: async (requester: User): Promise<User[]> => {
@@ -228,7 +247,7 @@ export const api = {
       const userId = `user-artist-${Date.now()}`;
       const password = Math.random().toString(36).slice(-8);
       newUser = { 
-          id: userId, name: artistData.name, email: artistData.email, password, role: UserRole.ARTIST, labelId: artistData.labelId, artistId: id, permissions: { canManageArtists: false, canManageReleases: false, canCreateSubLabels: false }
+          id: userId, name: artistData.name, email: artistData.email, password, role: UserRole.ARTIST, labelId: artistData.labelId, artistId: id, artistName: artistData.name, permissions: { canManageArtists: false, canManageReleases: false, canCreateSubLabels: false }
       };
       users.push(newUser);
     }
@@ -248,13 +267,16 @@ export const api = {
     artists[index] = { ...artists[index], ...data } as Artist;
     const user = users.find(u => u.artistId === id);
     if (user) {
-      if (data.name) user.name = data.name;
+      if (data.name) {
+          user.name = data.name;
+          user.artistName = data.name;
+      }
       if (data.email) user.email = data.email;
     } else if (data.email && data.email.trim() !== '') {
         const userId = `user-artist-${Date.now()}`;
         const password = Math.random().toString(36).slice(-8);
         const newUser: User = { 
-            id: userId, name: artists[index].name, email: data.email, password, role: UserRole.ARTIST, labelId: artists[index].labelId, artistId: id, permissions: { canManageArtists: false, canManageReleases: false, canCreateSubLabels: false }
+            id: userId, name: artists[index].name, email: data.email, password, role: UserRole.ARTIST, labelId: artists[index].labelId, artistId: id, artistName: artists[index].name, permissions: { canManageArtists: false, canManageReleases: false, canCreateSubLabels: false }
         };
         users.push(newUser);
     }
@@ -350,11 +372,41 @@ export const api = {
   },
 
   createSubLabel: async (data: any): Promise<{ label: Label, user: User }> => {
-    const labelId = `label-${Date.now()}`;
+    return api.createLabel(data);
+  },
+
+  createLabel: async (data: any): Promise<{ label: Label, user: User }> => {
+    const labelId = data.id || `label-${Date.now()}`;
     const userId = `user-${Date.now()}`;
-    const password = Math.random().toString(36).slice(-8);
-    const newLabel: Label = { id: labelId, name: data.name, parentLabelId: data.parentLabelId, ownerId: userId };
-    const newUser: User = { id: userId, name: `${data.name} Admin`, email: data.adminEmail, password, role: UserRole.LABEL_ADMIN, labelId, permissions: data.permissions };
+    const password = data.adminPassword || Math.random().toString(36).slice(-8);
+    
+    const newLabel: Label = { 
+        id: labelId, 
+        name: data.name, 
+        parentLabelId: data.parentLabelId || undefined, 
+        ownerId: userId,
+        address: data.address,
+        city: data.city,
+        country: data.country,
+        taxId: data.taxId,
+        website: data.website,
+        phone: data.phone,
+        revenueShare: data.revenueShare || 70,
+        status: data.status || 'Active',
+        createdAt: new Date().toISOString()
+    };
+
+    const newUser: User = { 
+        id: userId, 
+        name: data.adminName || `${data.name} Admin`, 
+        email: data.adminEmail, 
+        password, 
+        role: data.parentLabelId ? UserRole.SUB_LABEL_ADMIN : UserRole.LABEL_ADMIN, 
+        labelId, 
+        labelName: data.name,
+        permissions: data.permissions || { canManageArtists: true, canManageReleases: true, canCreateSubLabels: true } 
+    };
+
     labels.push(newLabel);
     users.push(newUser);
     persist();
