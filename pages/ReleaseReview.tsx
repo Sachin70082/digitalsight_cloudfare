@@ -327,7 +327,7 @@ const ReleaseReview: React.FC = () => {
                                         {isProcessing ? <Spinner className="w-5 h-5" /> : (
                                             <>
                                                 <CheckCircleIcon className="w-6 h-6" /> 
-                                                <span className="text-xs tracking-widest">Authorize Ingest</span>
+                                                <span className="text-xs tracking-widest">Finalize & Publish</span>
                                             </>
                                         )}
                                     </Button>
@@ -341,7 +341,7 @@ const ReleaseReview: React.FC = () => {
                                         className="w-full flex items-center justify-center gap-3 py-4 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500/10 rounded-2xl transition-all"
                                     >
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 15l-3-3m0 0l3-3m-3 3h8M3 12a9 9 0 1118 0 a9 9 0 11-18 0z" /></svg>
-                                        <span className="text-[10px] tracking-widest">Return for Fixes</span>
+                                        <span className="text-[10px] tracking-widest">Return for Corrections</span>
                                     </Button>
                                 )}
 
@@ -354,7 +354,7 @@ const ReleaseReview: React.FC = () => {
                                     {isProcessing ? <Spinner className="w-5 h-5" /> : (
                                         <>
                                             <XCircleIcon className="w-6 h-6" /> 
-                                            <span className="text-[10px] tracking-widest">Purge Content</span>
+                                            <span className="text-[10px] tracking-widest">Reject Content</span>
                                         </>
                                     )}
                                 </Button>
@@ -369,7 +369,7 @@ const ReleaseReview: React.FC = () => {
                                         {isProcessing ? <Spinner className="w-5 h-5" /> : (
                                             <>
                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                                <span className="text-[10px] tracking-widest">Execute Takedown</span>
+                                                <span className="text-[10px] tracking-widest">Takedown</span>
                                             </>
                                         )}
                                     </Button>
@@ -441,14 +441,14 @@ const ReleaseReview: React.FC = () => {
                             <strong>Note:</strong> Specify exactly which metadata fields or binary assets require correction by the Label administrator.
                         </p>
                     </div>
-                    <div className="space-y-3">
+                    <div className=" space-y-3">
                         <label className="text-[10px] font-black text-gray-500 uppercase tracking-widest ml-1">Directive Details</label>
                         <Textarea 
                             placeholder="e.g. Artwork is not 3000x3000px. Track 2 ISRC is invalid. Please update and resubmit."
                             value={feedbackNote}
                             onChange={(e) => setFeedbackNote(e.target.value)}
                             rows={6}
-                            className="bg-black/40 border-gray-700 rounded-[1.25rem]"
+                            className="w-full block bg-black/40 border-gray-700 rounded-[1.25rem]"
                             autoFocus
                         />
                     </div>
