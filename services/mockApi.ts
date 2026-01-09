@@ -8,6 +8,25 @@ import { User, UserRole, Label, Artist, Release, ReleaseStatus, UserPermissions,
 // Helper to handle Firebase "null" results for arrays
 const ensureArray = <T>(val: any): T[] => (val ? (Array.isArray(val) ? val : Object.values(val)) : []);
 
+/**
+ * Internal helper to resolve all label IDs in a hierarchy (self + all nested children)
+ */
+const getLabelHierarchyIds = async (rootLabelId: string): Promise<string[]> => {
+    const snapshot = await get(ref(db, 'labels'));
+    const allLabels = ensureArray<Label>(snapshot.val());
+    
+    const getChildren = (pid: string): string[] => {
+        const children = allLabels.filter(l => l.parentLabelId === pid);
+        let ids = children.map(l => l.id);
+        for (const child of children) {
+            ids = [...ids, ...getChildren(child.id)];
+        }
+        return ids;
+    };
+
+    return [rootLabelId, ...getChildren(rootLabelId)];
+};
+
 const defaultPermissions: UserPermissions = {
   canManageArtists: false,
   canManageReleases: false,
@@ -246,9 +265,14 @@ export const api = {
     return snap.val();
   },
 
+  /**
+   * Hierarchical fetch for artists. 
+   * Includes artists for the given label and all its sub-labels.
+   */
   getArtistsByLabel: async (labelId: string): Promise<Artist[]> => {
+    const hierarchyIds = await getLabelHierarchyIds(labelId);
     const snap = await get(ref(db, 'artists'));
-    return ensureArray<Artist>(snap.val()).filter(a => a.labelId === labelId);
+    return ensureArray<Artist>(snap.val()).filter(a => hierarchyIds.includes(a.labelId));
   },
 
   addArtist: async (artistData: Omit<Artist, 'id'>): Promise<{artist: Artist, user?: User}> => {
@@ -292,26 +316,15 @@ export const api = {
     return ensureArray<Release>(snap.val());
   },
 
+  /**
+   * Hierarchical fetch for releases.
+   * Includes releases for the given label and all its nested sub-labels.
+   */
   getReleasesByLabel: async (labelId: string): Promise<Release[]> => {
-    const [releasesSnap, allLabelsSnap] = await Promise.all([
-        get(ref(db, 'releases')),
-        get(ref(db, 'labels'))
-    ]);
-    
-    const releases = ensureArray<Release>(releasesSnap.val());
-    const allLabels = ensureArray<Label>(allLabelsSnap.val());
-
-    const getChildIds = (pid: string): string[] => {
-        const children = allLabels.filter(l => l.parentLabelId === pid);
-        let ids = children.map(l => l.id);
-        for (const child of children) {
-            ids = [...ids, ...getChildIds(child.id)];
-        }
-        return ids;
-    };
-
-    const targetLabelIds = [labelId, ...getChildIds(labelId)];
-    return releases.filter(r => targetLabelIds.includes(r.labelId));
+    const hierarchyIds = await getLabelHierarchyIds(labelId);
+    const snapshot = await get(ref(db, 'releases'));
+    const releases = ensureArray<Release>(snapshot.val());
+    return releases.filter(r => hierarchyIds.includes(r.labelId));
   },
 
   getRelease: async (id: string): Promise<Release | undefined> => {
@@ -419,8 +432,13 @@ export const api = {
     return ensureArray<RevenueEntry>(snap.val());
   },
 
+  /**
+   * Hierarchical revenue fetch.
+   * Aggregates revenue for the label and all sub-labels.
+   */
   getRevenueForLabelHierarchy: async (labelId: string): Promise<RevenueEntry[]> => {
+    const hierarchyIds = await getLabelHierarchyIds(labelId);
     const all = await api.getAllRevenue();
-    return all.filter(r => r.labelId === labelId);
+    return all.filter(r => hierarchyIds.includes(r.labelId));
   }
 };
