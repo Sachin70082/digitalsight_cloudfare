@@ -26,39 +26,47 @@ const EXCEL_HEADERS = [
 ];
 
 const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels: Map<string, Label>) => {
+  if (!release) return [];
+  
   const label = labels.get(release.labelId);
-  const albumArtist = artists.get(release.primaryArtistIds[0]);
+  const releasePrimaryIds = release.primaryArtistIds || [];
+  const albumArtist = artists.get(releasePrimaryIds[0]);
 
-  return release.tracks.map(track => {
-    const trackMainArtists = track.primaryArtistIds.map(id => artists.get(id)?.name).filter(Boolean).join(', ');
-    const trackFeaturedArtists = track.featuredArtistIds.map(id => artists.get(id)?.name).filter(Boolean).join(', ');
+  return (release.tracks || []).map(track => {
+    if (!track) return [];
     
-    const mainArtistObj = artists.get(track.primaryArtistIds[0]);
+    const trackPrimaryIds = track.primaryArtistIds || [];
+    const trackFeaturedIds = track.featuredArtistIds || [];
     
-    const mins = Math.floor(track.duration / 60);
-    const secs = track.duration % 60;
+    const trackMainArtists = trackPrimaryIds.map(id => artists.get(id)?.name).filter(Boolean).join(', ');
+    const trackFeaturedArtists = trackFeaturedIds.map(id => artists.get(id)?.name).filter(Boolean).join(', ');
+    
+    const mainArtistObj = artists.get(trackPrimaryIds[0]);
+    
+    const mins = Math.floor((track.duration || 0) / 60);
+    const secs = (track.duration || 0) % 60;
     const durationStr = `${mins}:${secs.toString().padStart(2, '0')}`;
 
     return [
       track.crbtCutName || '',
-      track.title,
-      release.title,
+      track.title || 'Untitled',
+      release.title || 'Untitled',
       release.language || '',
-      release.releaseType,
+      release.releaseType || 'Single',
       track.contentType || 'Music',
       release.genre || '',
       release.subGenre || '',
       release.mood || '',
       release.description || '',
-      release.upc,
-      track.isrc,
-      label?.name || '',
+      release.upc || '',
+      track.isrc || '',
+      label?.name || 'Unknown Label',
       'Yes',
       '',
       release.publisher || '',
       albumArtist?.name || '',
-      trackMainArtists,
-      trackFeaturedArtists,
+      trackMainArtists || '',
+      trackFeaturedArtists || '',
       '',
       track.composer || '',
       '',
@@ -67,16 +75,16 @@ const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels
       '',
       '',
       track.dolbyIsrc || '',
-      track.trackNumber,
+      track.trackNumber || 1,
       durationStr,
       track.crbtTime || '00:30',
       release.originalReleaseDate || '',
-      release.releaseDate,
-      release.releaseDate,
+      release.releaseDate || '',
+      release.releaseDate || '',
       '00:00:00',
       '',
-      release.cLine,
-      release.pLine,
+      release.cLine || '',
+      release.pLine || '',
       release.filmBanner || '',
       release.filmDirector || '',
       release.filmProducer || '',
@@ -100,13 +108,14 @@ const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels
 
 export const getReleaseExcelBuffer = (release: Release, artists: Map<string, Artist>, labels: Map<string, Label>): ArrayBuffer => {
   if (!window.XLSX) throw new Error('Excel library not loaded');
+  if (!artists) artists = new Map();
+  if (!labels) labels = new Map();
 
   const rows = mapReleaseToRows(release, artists, labels);
   const ws = window.XLSX.utils.aoa_to_sheet([EXCEL_HEADERS, ...rows]);
   const wb = window.XLSX.utils.book_new();
   window.XLSX.utils.book_append_sheet(wb, ws, "Metadata");
   
-  // Write as array buffer
   return window.XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
 };
 
@@ -115,8 +124,11 @@ export const exportReleasesToExcel = (releases: Release[], artists: Map<string, 
     alert('Excel library not loaded. Please refresh or check connection.');
     return;
   }
+  
+  const safeArtists = artists || new Map();
+  const safeLabels = labels || new Map();
 
-  const allRows = releases.flatMap(rel => mapReleaseToRows(rel, artists, labels));
+  const allRows = (releases || []).flatMap(rel => mapReleaseToRows(rel, safeArtists, safeLabels));
 
   const ws = window.XLSX.utils.aoa_to_sheet([EXCEL_HEADERS, ...allRows]);
   const wb = window.XLSX.utils.book_new();
@@ -136,7 +148,7 @@ export const exportFinancialsToExcel = (revenue: RevenueEntry[], labels: Map<str
     'GROSS AMOUNT ($)', 'PAYMENT STATUS', 'PROCESSING DATE'
   ];
 
-  const rows = revenue.map(entry => {
+  const rows = (revenue || []).map(entry => {
     const label = labels.get(entry.labelId);
     return [
       entry.id,

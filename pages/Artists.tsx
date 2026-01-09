@@ -2,7 +2,7 @@
 import React, { useState, useContext, useEffect, useMemo } from 'react';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
-import { Artist, ArtistType, User, UserRole } from '../types';
+import { Artist, ArtistType, User, UserRole, Label } from '../types';
 import { Button, Card, Input, Modal, Spinner, PageLoader, Pagination } from '../components/ui';
 
 const ArtistForm: React.FC<{
@@ -17,7 +17,20 @@ const ArtistForm: React.FC<{
     const [spotifyId, setSpotifyId] = useState(initialData?.spotifyId || '');
     const [appleMusicId, setAppleMusicId] = useState(initialData?.appleMusicId || '');
     const [instagramUrl, setInstagramUrl] = useState(initialData?.instagramUrl || '');
+    const [targetLabelId, setTargetLabelId] = useState(initialData?.labelId || user?.labelId || '');
+    const [hierarchyLabels, setHierarchyLabels] = useState<Label[]>([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        const loadHierarchy = async () => {
+            if (user?.labelId) {
+                const subLabels = await api.getSubLabels(user.labelId);
+                const selfLabel = await api.getLabel(user.labelId);
+                setHierarchyLabels(selfLabel ? [selfLabel, ...subLabels] : subLabels);
+            }
+        };
+        loadHierarchy();
+    }, [user]);
 
     const isEditing = !!initialData;
 
@@ -32,7 +45,7 @@ const ArtistForm: React.FC<{
             spotifyId,
             appleMusicId,
             instagramUrl,
-            labelId: initialData?.labelId || user?.labelId || 'global',
+            labelId: targetLabelId,
         };
         
         try {
@@ -54,6 +67,23 @@ const ArtistForm: React.FC<{
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            {hierarchyLabels.length > 1 && (
+                <div className="p-4 bg-primary/5 border border-primary/10 rounded-2xl mb-4">
+                    <label className="block text-[11px] font-black text-primary uppercase tracking-widest mb-2">Target Node Assignment</label>
+                    <select 
+                        value={targetLabelId} 
+                        onChange={e => setTargetLabelId(e.target.value)}
+                        className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                    >
+                        {hierarchyLabels.map(l => (
+                            <option key={l.id} value={l.id}>
+                                {l.id === user?.labelId ? `[MASTER] ${l.name}` : `↳ [CHILD] ${l.name}`}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            )}
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Input label="Artist/Band Name" value={name} onChange={e => setName(e.target.value)} required placeholder="Stage Name" />
                 <div>
@@ -117,6 +147,7 @@ const Artists: React.FC = () => {
                 const data = await api.getAllArtists();
                 setArtists(data);
             } else if (user?.labelId) {
+                // api.getArtistsByLabel is now hierarchical
                 const data = await api.getArtistsByLabel(user.labelId);
                 setArtists(data);
             }
@@ -198,9 +229,12 @@ const Artists: React.FC = () => {
         <div className="space-y-6 animate-fade-in">
             <Card className="p-0 overflow-hidden">
                 <div className="p-8 flex flex-col md:flex-row justify-between items-center gap-4 border-b border-white/5">
-                    <h2 className="text-2xl font-black text-white uppercase tracking-tight">
-                        {user?.role === UserRole.OWNER ? 'Master Artist Archive' : 'Managed Artist Roster'}
-                    </h2>
+                    <div>
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">
+                            {user?.role === UserRole.OWNER ? 'Master Artist Archive' : 'Managed Artist Roster'}
+                        </h2>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-1">Includes all sub-label artists assigned to your branch.</p>
+                    </div>
                     <div className="flex items-center gap-4 w-full md:w-auto">
                         <div className="relative group flex-1 md:flex-none">
                              <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors">

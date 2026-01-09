@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
-import { Release, Track, ReleaseType, Artist, ReleaseStatus } from '../types';
+import { Release, Track, ReleaseType, Artist, ReleaseStatus, Label } from '../types';
 import { Button, Input, Textarea, Spinner } from './ui';
 import { SparklesIcon, UploadIcon, XCircleIcon, MusicIcon, CheckCircleIcon } from './Icons';
 import { generateReleaseDescription } from '../services/geminiService';
@@ -16,7 +16,7 @@ interface ReleaseFormProps {
     initialReleaseId?: string;
 }
 
-type FormData = Omit<Release, 'createdAt' | 'updatedAt' | 'labelId'>;
+type FormData = Omit<Release, 'createdAt' | 'updatedAt'>;
 
 const sanitizeFilename = (name: string) => {
     return name.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
@@ -54,6 +54,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
 
     const [submissionNote, setSubmissionNote] = useState('');
     const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
+    const [hierarchyLabels, setHierarchyLabels] = useState<Label[]>([]);
     const [isGenerating, setIsGenerating] = useState(false);
 
     const [stagedArtwork, setStagedArtwork] = useState<File | null>(null);
@@ -66,6 +67,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         releaseType: ReleaseType.SINGLE,
         primaryArtistIds: [],
         featuredArtistIds: [],
+        labelId: user?.labelId || '',
         upc: '',
         catalogueNumber: '',
         releaseDate: new Date().toISOString().split('T')[0],
@@ -94,9 +96,20 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     useEffect(() => {
         const loadInitialData = async () => {
             if (user?.labelId) {
-                const artists = await api.getArtistsByLabel(user.labelId);
+                // Fetch hierarchical data: all artists and sub-labels in the branch
+                const [artists, subLabels] = await Promise.all([
+                    api.getArtistsByLabel(user.labelId),
+                    api.getSubLabels(user.labelId)
+                ]);
+                
                 setLabelArtists(artists);
+                
+                // Get self label for selection list
+                const selfLabel = await api.getLabel(user.labelId);
+                const combinedLabels = selfLabel ? [selfLabel, ...subLabels] : subLabels;
+                setHierarchyLabels(combinedLabels);
             }
+
             if (initialReleaseId) {
                 const existing = await api.getRelease(initialReleaseId);
                 if (existing) {
@@ -110,7 +123,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 }
                 setIsLoading(false);
             } else {
-                setFormData(prev => ({ ...prev, tracks: [emptyTrack(1)] }));
+                setFormData(prev => ({ ...prev, tracks: [emptyTrack(1)], labelId: user?.labelId || '' }));
             }
         };
         loadInitialData();
@@ -246,6 +259,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     const handleAction = async (isSubmission: boolean) => {
         if (!user || !user.labelId) return;
         if (!formData.title) { alert('Title is mandatory.'); setStep(1); return; }
+        if (!formData.labelId) { alert('Target Label is mandatory.'); setStep(1); return; }
         
         if (isSubmission) {
             if (!formData.artworkUrl) { alert('Cover art is mandatory for submission.'); setStep(6); return; }
@@ -275,7 +289,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 artworkFileName: sanitizeFilename(formData.title) + '_cover'
             };
 
-            const result = await api.addRelease({ ...finalData, labelId: user.labelId });
+            const result = await api.addRelease(finalData);
             onSave(result);
             onClose();
         } catch (error: any) {
@@ -287,6 +301,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     if (isLoading) return <div className="py-20 flex justify-center"><Spinner /></div>;
 
     const canSubmit = user?.permissions?.canSubmitAlbums || user?.role === 'Owner' || user?.role === 'Employee';
+    const showLabelSelector = hierarchyLabels.length > 1;
     
     return (
         <div className="space-y-6 relative min-h-[600px]">
@@ -332,6 +347,25 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 {step === 1 && (
                     <div className="space-y-6 animate-fade-in">
                         <h3 className="text-xl font-bold text-white mb-4 uppercase tracking-tight">Identity Meta</h3>
+                        
+                        {showLabelSelector && (
+                            <div className="mb-6 p-4 bg-primary/5 border border-primary/10 rounded-2xl">
+                                <label className="block text-[11px] font-black text-primary uppercase tracking-widest mb-2">Publishing Entity (Branch Hierarchy)</label>
+                                <select 
+                                    value={formData.labelId} 
+                                    onChange={e => handleChange('labelId', e.target.value)}
+                                    className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-sm text-white focus:ring-1 focus:ring-primary outline-none"
+                                >
+                                    {hierarchyLabels.map(l => (
+                                        <option key={l.id} value={l.id}>
+                                            {l.id === user?.labelId ? `[MASTER] ${l.name}` : `↳ [CHILD] ${l.name}`}
+                                        </option>
+                                    ))}
+                                </select>
+                                <p className="text-[9px] text-gray-500 mt-2 font-bold uppercase tracking-widest">Select which label branch this metadata and revenue should be synchronized with.</p>
+                            </div>
+                        )}
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <Input label="Session Title" placeholder="e.g. Neon Nights" value={formData.title} onChange={e => handleChange('title', e.target.value)} required />
                              <div>
@@ -346,8 +380,8 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <ArtistSelector label="Primary Node(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
-                            <ArtistSelector label="Featured Node(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
+                            <ArtistSelector label="Primary Node(s) - Entire Branch" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
+                            <ArtistSelector label="Featured Node(s) - Entire Branch" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
                         </div>
                          <div className="relative">
                             <Textarea label="Production Description" rows={4} placeholder="Describe this session..." value={formData.description} onChange={e => handleChange('description', e.target.value)} />

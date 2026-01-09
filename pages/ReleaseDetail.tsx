@@ -1,10 +1,10 @@
 
-import React, { useEffect, useState, useContext, useMemo } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useContext } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/mockApi';
 import { Release, Track, Artist, Label, InteractionNote, UserRole } from '../types';
 import { AppContext } from '../App';
-import { Badge, Card, CardContent, CardHeader, CardTitle, PageLoader, Spinner } from '../components/ui';
+import { Badge, Card, CardContent, CardHeader, CardTitle, PageLoader } from '../components/ui';
 import { ArrowLeftIcon, MusicIcon } from '../components/Icons';
 
 const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
@@ -45,49 +45,6 @@ const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => (
     </div>
 );
 
-const CircularProgress: React.FC<{ percentage: number, current: number, total: number, status: string }> = ({ percentage, current, total, status }) => {
-    const radius = 70;
-    const circumference = 2 * Math.PI * radius;
-    const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-    return (
-        <div className="flex flex-col items-center justify-center min-h-[600px] animate-fade-in">
-            <div className="relative w-48 h-48 flex items-center justify-center">
-                <div className="absolute inset-0 bg-primary/10 blur-3xl rounded-full animate-pulse-slow"></div>
-                <svg className="w-full h-full transform -rotate-90 relative z-10">
-                    <circle cx="96" cy="96" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-gray-800" />
-                    <circle
-                        cx="96"
-                        cy="96"
-                        r={radius}
-                        stroke="currentColor"
-                        strokeWidth="8"
-                        fill="transparent"
-                        strokeDasharray={circumference}
-                        style={{ strokeDashoffset, transition: 'stroke-dashoffset 0.5s ease-out' }}
-                        strokeLinecap="round"
-                        className="text-primary shadow-[0_0_15px_rgba(29,185,84,0.5)]"
-                    />
-                </svg>
-                <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                    <span className="text-4xl font-black text-white tracking-tighter leading-none">{Math.round(percentage)}%</span>
-                    <span className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1">Priming</span>
-                </div>
-            </div>
-
-            <div className="mt-12 text-center space-y-2">
-                <h3 className="text-xl font-black text-white uppercase tracking-tight">Vault Synchronization</h3>
-                <p className="text-sm text-gray-500 font-medium">Downloading Segment: <span className="text-primary font-bold">{current} of {total}</span></p>
-                <p className="text-[10px] text-gray-600 font-mono uppercase tracking-[0.2em]">{status}</p>
-                <div className="flex items-center justify-center gap-2 pt-4">
-                    <Spinner className="w-3 h-3 border-primary" />
-                    <span className="text-[10px] text-gray-400 font-black uppercase tracking-[0.1em]">Caching high-fidelity assets...</span>
-                </div>
-            </div>
-        </div>
-    );
-};
-
 const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -97,26 +54,19 @@ const formatDuration = (seconds: number) => {
 const ReleaseDetail: React.FC = () => {
     const { releaseId } = useParams<{ releaseId: string }>();
     const navigate = useNavigate();
-    const { user } = useContext(AppContext);
     
     const [release, setRelease] = useState<Release | null>(null);
     const [artist, setArtist] = useState<Artist | null>(null);
     const [label, setLabel] = useState<Label | null>(null);
     const [allArtists, setAllArtists] = useState<Map<string, Artist>>(new Map());
     
-    const [isLoadingMeta, setIsLoadingMeta] = useState(true);
-    const [isSyncingAssets, setIsSyncingAssets] = useState(false);
-    const [syncedCount, setSyncedCount] = useState(0);
-    const [syncStatus, setSyncStatus] = useState('Initializing Node...');
-    
-    // Map to store local Blob URLs for instant playback
-    const [localAudioMap, setLocalAudioMap] = useState<Record<string, string>>({});
+    const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         if (!releaseId) return;
 
         const fetchData = async () => {
-            setIsLoadingMeta(true);
+            setIsLoading(true);
             try {
                 const [releaseData, fetchedArtists] = await Promise.all([
                     api.getRelease(releaseId),
@@ -125,7 +75,7 @@ const ReleaseDetail: React.FC = () => {
 
                 if (!releaseData) {
                     setRelease(null);
-                    setIsLoadingMeta(false);
+                    setIsLoading(false);
                     return;
                 }
                 setRelease(releaseData);
@@ -143,65 +93,18 @@ const ReleaseDetail: React.FC = () => {
                      const labelData = await api.getLabel(releaseData.labelId);
                      setLabel(labelData || null);
                 }
-                
-                setIsLoadingMeta(false);
-                
-                // Start High-Fidelity Binary Priming
-                if (releaseData.tracks && releaseData.tracks.length > 0) {
-                    setIsSyncingAssets(true);
-                    let count = 0;
-                    const total = releaseData.tracks.length;
-                    const newLocalUrls: Record<string, string> = {};
-                    
-                    for (const track of releaseData.tracks) {
-                        setSyncStatus(`Buffering: ${track.title}...`);
-                        
-                        if (track.audioUrl && track.audioUrl !== 'staged') {
-                            try {
-                                // Full fetch to prime the browser cache and create a Blob URL for instant access
-                                const response = await fetch(track.audioUrl);
-                                if (response.ok) {
-                                    const blob = await response.blob();
-                                    const localUrl = URL.createObjectURL(blob);
-                                    newLocalUrls[track.id] = localUrl;
-                                }
-                            } catch (e) {
-                                console.warn(`Vault Sync Error: Track ${track.trackNumber} fetch failed. falling back to remote link.`);
-                                newLocalUrls[track.id] = track.audioUrl;
-                            }
-                        }
-                        count++;
-                        setSyncedCount(count);
-                    }
-                    setLocalAudioMap(newLocalUrls);
-                    setIsSyncingAssets(false);
-                }
             } catch (error) {
                 console.error("Failed to fetch release details", error);
-                setIsLoadingMeta(false);
+            } finally {
+                setIsLoading(false);
             }
         };
 
         fetchData();
-
-        // Cleanup: Revoke local Blob URLs to free up memory
-        return () => {
-            Object.values(localAudioMap).forEach(url => {
-                if (url.startsWith('blob:')) {
-                    URL.revokeObjectURL(url);
-                }
-            });
-        };
     }, [releaseId]);
 
-    if (isLoadingMeta) return <PageLoader />;
+    if (isLoading) return <PageLoader />;
     if (!release) return <div className="text-center p-20 text-red-500 font-black uppercase tracking-widest animate-fade-in">Session not found in distribution archive.</div>;
-
-    if (isSyncingAssets) {
-        const total = release.tracks?.length || 0;
-        const percentage = total > 0 ? (syncedCount / total) * 100 : 100;
-        return <CircularProgress percentage={percentage} current={syncedCount} total={total} status={syncStatus} />;
-    }
 
     return (
         <div className="space-y-8 animate-fade-in w-full pb-20">
@@ -297,7 +200,6 @@ const ReleaseDetail: React.FC = () => {
                                 {(release.tracks || []).map((track: Track) => {
                                     const primaryArtists = (track.primaryArtistIds || []).map(id => allArtists.get(id)?.name).filter(Boolean).join(', ');
                                     const featuredArtists = (track.featuredArtistIds || []).map(id => allArtists.get(id)?.name).filter(Boolean).join(', ');
-                                    const audioSource = localAudioMap[track.id] || track.audioUrl;
 
                                     return (
                                         <div key={track.id} className="p-8 bg-black/40 rounded-[2rem] border border-gray-800/60 hover:border-primary/30 transition-all group/track">
@@ -336,8 +238,7 @@ const ReleaseDetail: React.FC = () => {
                                                     <MusicIcon className="w-4 h-4 text-primary" />
                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Master Reference Preview</span>
                                                 </div>
-                                                {/* Local source allows for instantaneous seeking and playback */}
-                                                <audio controls src={audioSource} className="h-10 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
+                                                <audio controls src={track.audioUrl} className="h-10 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
                                             </div>
                                         </div>
                                     );
