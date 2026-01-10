@@ -62,7 +62,7 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
 }
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, id, className = '', ...props }, ref) => (
-    <div className="space-y-2">
+    <div className="space-y-2 w-full">
         {label && <label htmlFor={id} className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">{label}</label>}
         <input
             ref={ref}
@@ -77,13 +77,13 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ label, id
 interface TextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {
     label?: string;
 }
-export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, id, ...props }, ref) => (
-    <div className="space-y-2">
+export const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(({ label, id, className = '', ...props }, ref) => (
+    <div className="space-y-2 w-full">
         {label && <label htmlFor={id} className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">{label}</label>}
         <textarea
             ref={ref}
             id={id}
-            className="w-full bg-gray-700 border border-gray-600 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all min-h-[100px]"
+            className={`w-full block bg-gray-700 border border-gray-600 rounded-xl p-4 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary transition-all min-h-[120px] resize-none ${className}`}
             {...props}
         />
     </div>

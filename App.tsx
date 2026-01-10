@@ -3,7 +3,8 @@ import React, { useState, createContext, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
-import { User as FirebaseUser } from 'firebase/auth';
+// @fix: Use import type for User as it's not exported as a value in the current firebase/auth build
+import type { User as FirebaseUser } from 'firebase/auth';
 
 import Layout from './components/Layout';
 import Login from './pages/Login';

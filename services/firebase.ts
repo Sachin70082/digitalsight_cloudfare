@@ -2,7 +2,10 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getDatabase } from 'firebase/database';
 import { getStorage } from 'firebase/storage';
-import { getAuth } from 'firebase/auth';
+// @fix: Use namespace import to bypass named export resolution issues with firebase/auth types in this environment
+import * as authExports from 'firebase/auth';
+
+const getAuth = (authExports as any).getAuth;
 
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {

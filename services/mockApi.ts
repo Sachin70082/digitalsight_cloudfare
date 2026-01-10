@@ -1,12 +1,47 @@
 
 import { ref, set, get, update, remove, push, query, orderByChild, equalTo } from 'firebase/database';
-import { ref as sRef, deleteObject, listAll } from 'firebase/storage';
-import { signInWithEmailAndPassword, signOut, createUserWithEmailAndPassword, updatePassword, reauthenticateWithCredential, EmailAuthProvider, User as FirebaseUser } from 'firebase/auth';
+import { ref as sRef, deleteObject, listAll, StorageReference } from 'firebase/storage';
+// @fix: Use namespace import and any cast for firebase/auth to resolve "no exported member" errors in the environment
+import * as authExports from 'firebase/auth';
+const { 
+  signInWithEmailAndPassword, 
+  signOut, 
+  createUserWithEmailAndPassword, 
+  updatePassword, 
+  reauthenticateWithCredential, 
+  EmailAuthProvider 
+} = authExports as any;
+type FirebaseUser = any;
+
 import { db, storage, auth, secondaryAuth } from './firebase';
 import { User, UserRole, Label, Artist, Release, ReleaseStatus, UserPermissions, InteractionNote, Notice, RevenueEntry } from '../types';
 
 // Helper to handle Firebase "null" results for arrays
 const ensureArray = <T>(val: any): T[] => (val ? (Array.isArray(val) ? val : Object.values(val)) : []);
+
+/**
+ * Robust recursive deletion for Firebase Storage.
+ * Ensures the app doesn't crash if files are already missing.
+ */
+const deleteFolderRecursive = async (folderRef: StorageReference) => {
+    try {
+        const list = await listAll(folderRef);
+        
+        // Delete all files in current prefix
+        const fileDeletions = list.items.map(item => 
+            deleteObject(item).catch(err => {
+                if (err.code !== 'storage/object-not-found') throw err;
+            })
+        );
+        await Promise.all(fileDeletions);
+        
+        // Recurse into all sub-prefixes
+        const prefixDeletions = list.prefixes.map(prefix => deleteFolderRecursive(prefix));
+        await Promise.all(prefixDeletions);
+    } catch (err) {
+        console.warn(`[Vault Purge] Prefix not found or inaccessible: ${folderRef.fullPath}`);
+    }
+};
 
 /**
  * Internal helper to resolve all label IDs in a hierarchy (self + all nested children)
@@ -52,7 +87,6 @@ const ownerPermissions: UserPermissions = {
 };
 
 export const api = {
-  // Enhanced Login: Returns Profile, or a flag if Master Auth is OK but Profile is missing
   login: async (email: string, password?: string): Promise<User | { needsProfile: true, firebaseUser: FirebaseUser } | undefined> => {
     if (!password) throw new Error('Password required.');
     
@@ -61,10 +95,8 @@ export const api = {
     
     let authResult;
     try {
-        // Attempt standard sign-in
         authResult = await signInWithEmailAndPassword(auth, cleanEmail, password);
     } catch (error: any) {
-        // If it's the master owner and login fails because user doesn't exist, bootstrap the account
         if (isMasterEmail && (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found')) {
             try {
                 authResult = await createUserWithEmailAndPassword(auth, cleanEmail, password);
@@ -80,17 +112,13 @@ export const api = {
     const profileSnap = await get(ref(db, `users/${firebaseUser.uid}`));
 
     if (!profileSnap.exists()) {
-        if (isMasterEmail) {
-            return { needsProfile: true, firebaseUser };
-        }
+        if (isMasterEmail) return { needsProfile: true, firebaseUser };
         
         const usersSnap = await get(ref(db, 'users'));
         const users = usersSnap.val() || {};
         let profileByEmail = Object.values(users).find((u: any) => u.email.toLowerCase() === cleanEmail) as User;
         
-        if (!profileByEmail) {
-            throw new Error('Identity verified, but platform profile not found in database.');
-        }
+        if (!profileByEmail) throw new Error('Identity verified, but platform profile not found in database.');
 
         if (isMasterEmail) {
             profileByEmail.role = UserRole.OWNER;
@@ -127,7 +155,6 @@ export const api = {
         designation: data.designation,
         permissions: { ...ownerPermissions }
     };
-
     await set(ref(db, `users/${uid}`), masterUser);
     return masterUser;
   },
@@ -135,7 +162,6 @@ export const api = {
   changePassword: async (oldPassword: string, newPassword: string): Promise<void> => {
     const currentUser = auth.currentUser;
     if (!currentUser || !currentUser.email) throw new Error('No active security session found.');
-
     try {
         const credential = EmailAuthProvider.credential(currentUser.email, oldPassword);
         await reauthenticateWithCredential(currentUser, credential);
@@ -178,26 +204,15 @@ export const api = {
     return labelSnap.val();
   },
 
+  /**
+   * Protocol Purge: Eradicates ONLY audio files (WAV masters).
+   * Kept for Rejected/Takedown statuses to preserve JSON metadata and Artwork.
+   */
   cleanupReleaseAssets: async (releaseId: string) => {
-    try {
-        const audioPath = `releases/${releaseId}/audio`;
-        const audioRef = sRef(storage, audioPath);
-        
-        const deleteRecursive = async (folderRef: any) => {
-            const list = await listAll(folderRef);
-            for (const item of list.items) { 
-                await deleteObject(item); 
-            }
-            for (const prefix of list.prefixes) { 
-                await deleteRecursive(prefix); 
-            }
-        };
-        
-        await deleteRecursive(audioRef);
-        console.log(`Vault Status: Purged WAV masters for sequence ${releaseId}`);
-    } catch (e) {
-        console.warn('Cleanup protocol finished (Vault was empty or inaccessible):', e);
-    }
+    const audioPath = `releases/${releaseId}/audio`;
+    const audioRef = sRef(storage, audioPath);
+    await deleteFolderRecursive(audioRef);
+    console.log(`[Vault Transmission] Audio masters purged for sequence ${releaseId}. JSON data and Artwork preserved.`);
   },
 
   deleteLabel: async (id: string, requester: User): Promise<void> => {
@@ -265,10 +280,6 @@ export const api = {
     return snap.val();
   },
 
-  /**
-   * Hierarchical fetch for artists. 
-   * Includes artists for the given label and all its sub-labels.
-   */
   getArtistsByLabel: async (labelId: string): Promise<Artist[]> => {
     const hierarchyIds = await getLabelHierarchyIds(labelId);
     const snap = await get(ref(db, 'artists'));
@@ -286,15 +297,9 @@ export const api = {
         const authResult = await createUserWithEmailAndPassword(secondaryAuth, artist.email, password);
         const uid = authResult.user.uid;
         user = { 
-            id: uid, 
-            name: artist.name, 
-            email: artist.email, 
-            role: UserRole.ARTIST, 
-            labelId: artist.labelId, 
-            artistId: aid, 
-            artistName: artist.name, 
-            password, 
-            permissions: { ...defaultPermissions } 
+            id: uid, name: artist.name, email: artist.email, role: UserRole.ARTIST, 
+            labelId: artist.labelId, artistId: aid, artistName: artist.name, 
+            password, permissions: { ...defaultPermissions } 
         };
         await set(ref(db, `users/${uid}`), user);
     }
@@ -316,10 +321,6 @@ export const api = {
     return ensureArray<Release>(snap.val());
   },
 
-  /**
-   * Hierarchical fetch for releases.
-   * Includes releases for the given label and all its nested sub-labels.
-   */
   getReleasesByLabel: async (labelId: string): Promise<Release[]> => {
     const hierarchyIds = await getLabelHierarchyIds(labelId);
     const snapshot = await get(ref(db, 'releases'));
@@ -332,34 +333,21 @@ export const api = {
     return snap.val() || undefined;
   },
 
+  /**
+   * Hard Delete: Full Eradication.
+   * Purges ALL assets (Artwork + Audio) from Storage and removes the DB record.
+   */
   deleteRelease: async (id: string): Promise<void> => {
-    // 1. Initial existence verification
     const releaseSnap = await get(ref(db, `releases/${id}`));
     if (!releaseSnap.exists()) return;
 
-    // 2. Comprehensive Storage Purge (Recursively targeting the release root folder)
-    try {
-        const rootRef = sRef(storage, `releases/${id}`);
-        const purgeRecursive = async (refNode: any) => {
-            const list = await listAll(refNode);
-            
-            // Delete file objects in parallel
-            await Promise.all(list.items.map(item => deleteObject(item)));
-            
-            // Recurse into sub-prefixes (folders)
-            for (const prefix of list.prefixes) {
-                await purgeRecursive(prefix);
-            }
-        };
-        await purgeRecursive(rootRef);
-        console.log(`Vault Transmission: Storage purge successful for sequence ${id}`);
-    } catch (e) {
-        console.warn('Storage cleanup protocol finished with warnings (possibly empty or partial node):', e);
-    }
+    // 1. Recursive Storage Wipe (Artwork AND Audio)
+    const rootRef = sRef(storage, `releases/${id}`);
+    await deleteFolderRecursive(rootRef);
     
-    // 3. Metadata Eradication
+    // 2. Database Record Eradication
     await remove(ref(db, `releases/${id}`));
-    console.log(`Vault Transmission: Database record eradicated for sequence ${id}`);
+    console.log(`[Vault Transmission] Hard delete successful for sequence ${id}. Node eradicated.`);
   },
 
   updateReleaseStatus: async (id: string, status: ReleaseStatus, note?: InteractionNote) => {
@@ -370,6 +358,7 @@ export const api = {
         if (note) updates.notes = [note, ...(ensureArray(release.notes))];
         await update(ref(db, `releases/${id}`), updates);
         
+        // Protocol: Only purge audio if rejected/takedown. Metadata and Artwork stay.
         if (status === ReleaseStatus.REJECTED || status === ReleaseStatus.TAKEDOWN) {
             await api.cleanupReleaseAssets(id);
         }
@@ -432,10 +421,6 @@ export const api = {
     return ensureArray<RevenueEntry>(snap.val());
   },
 
-  /**
-   * Hierarchical revenue fetch.
-   * Aggregates revenue for the label and all sub-labels.
-   */
   getRevenueForLabelHierarchy: async (labelId: string): Promise<RevenueEntry[]> => {
     const hierarchyIds = await getLabelHierarchyIds(labelId);
     const all = await api.getAllRevenue();

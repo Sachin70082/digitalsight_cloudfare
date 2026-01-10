@@ -231,7 +231,7 @@ const ReleaseReview: React.FC = () => {
             await api.updateReleaseStatus(release.id, newStatus, note);
             
             if (newStatus === ReleaseStatus.REJECTED || newStatus === ReleaseStatus.TAKEDOWN) {
-                showToast('Asset Purge Complete: Node removed from active distribution.', 'success');
+                showToast('Asset Purge Complete: Audio masters purged. Metadata preserved.', 'success');
             } else {
                 showToast(`Node status updated to ${newStatus}.`, 'success');
             }
@@ -346,7 +346,7 @@ const ReleaseReview: React.FC = () => {
                                 )}
 
                                 <Button 
-                                    onClick={() => handleStatusChange(ReleaseStatus.REJECTED, "Protocol Rejection: Content fails compliance. Assets purged from vault.")} 
+                                    onClick={() => handleStatusChange(ReleaseStatus.REJECTED, "Protocol Rejection: Content fails compliance. Audio masters purged from vault.")} 
                                     variant="danger" 
                                     disabled={isProcessing || isPublished}
                                     className="w-full flex items-center justify-center gap-3 py-4 rounded-2xl shadow-xl shadow-red-500/10"
@@ -448,7 +448,6 @@ const ReleaseReview: React.FC = () => {
                             value={feedbackNote}
                             onChange={(e) => setFeedbackNote(e.target.value)}
                             rows={6}
-                            className="w-full block bg-black/40 border-gray-700 p-4 rounded-[1.25rem]"
                             autoFocus
                         />
                     </div>
@@ -499,7 +498,7 @@ const ReleaseReview: React.FC = () => {
                              Irreversible Operation
                         </p>
                         <p className="text-sm text-gray-300 font-medium leading-relaxed">
-                            Takedown protocol will remove content from all active endpoints. Binary masters will be purged from the archive.
+                            Takedown protocol will remove content from all active endpoints. Binary masters will be purged from the archive. Metadata remains for audit.
                         </p>
                     </div>
                     <div className="space-y-3">
@@ -509,7 +508,6 @@ const ReleaseReview: React.FC = () => {
                             value={feedbackNote}
                             onChange={(e) => setFeedbackNote(e.target.value)}
                             rows={4}
-                            className="bg-black/40 border-gray-700 rounded-[1.25rem]"
                             autoFocus
                         />
                     </div>
