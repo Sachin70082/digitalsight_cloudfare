@@ -9,7 +9,8 @@ const {
   updatePassword, 
   reauthenticateWithCredential, 
   EmailAuthProvider,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  deleteUser
 } = authExports as any;
 type FirebaseUser = any;
 
@@ -246,6 +247,25 @@ export const api = {
   },
 
   deleteLabel: async (id: string, requester: User): Promise<void> => {
+    // 1. Find the owner of the label
+    const labelSnap = await get(ref(db, `labels/${id}`));
+    if (labelSnap.exists()) {
+        const labelData = labelSnap.val();
+        const ownerId = labelData.ownerId;
+        
+        if (ownerId) {
+            // 2. Remove from Realtime Database
+            await remove(ref(db, `users/${ownerId}`));
+            
+            // Note: Firebase Client SDK does not allow deleting OTHER users.
+            // To fully delete from Firebase Auth, you would typically use a Firebase Function (Admin SDK).
+            // However, we can attempt to delete the CURRENT user if they are the one being deleted,
+            // or log that manual intervention is needed for Auth cleanup.
+            console.log(`[Auth Cleanup] Label owner ${ownerId} removed from Database. Manual Firebase Auth deletion may be required if not using Admin SDK.`);
+        }
+    }
+
+    // 3. Remove the label itself
     await remove(ref(db, `labels/${id}`));
   },
 
