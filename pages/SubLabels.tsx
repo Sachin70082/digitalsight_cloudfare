@@ -6,7 +6,7 @@ import { Label, User, UserPermissions } from '../types';
 import { Card, CardHeader, CardTitle, CardContent, Button, Input, Modal, Spinner, PageLoader, Pagination } from '../components/ui';
 
 const SubLabels: React.FC = () => {
-    const { user } = useContext(AppContext);
+    const { user, showToast } = useContext(AppContext);
     const [subLabels, setSubLabels] = useState<Label[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -16,8 +16,10 @@ const SubLabels: React.FC = () => {
 
     const [editingLabelId, setEditingLabelId] = useState<string | null>(null);
     const [newName, setNewName] = useState('');
+    const [adminName, setAdminName] = useState('');
     const [newEmail, setNewEmail] = useState('');
     const [newLabelInfo, setNewLabelInfo] = useState<{label: Label, user: User} | null>(null);
+    const [maxArtists, setMaxArtists] = useState(10);
     const [permissions, setPermissions] = useState<UserPermissions>({
         canManageArtists: true,
         canManageReleases: true,
@@ -46,6 +48,8 @@ const SubLabels: React.FC = () => {
     const handleOpenEdit = async (label: Label) => {
         setEditingLabelId(label.id);
         setNewName(label.name);
+        setAdminName(''); // Will be set from admin profile
+        setMaxArtists(label.maxArtists || 10);
         setNewLabelInfo(null);
         
         const admin = await api.getLabelAdmin(label.id);
@@ -55,6 +59,7 @@ const SubLabels: React.FC = () => {
                 canSubmitAlbums: admin.permissions.canSubmitAlbums ?? true
             });
             setNewEmail(admin.email);
+            setAdminName(admin.name);
         }
         setIsModalOpen(true);
     };
@@ -73,25 +78,46 @@ const SubLabels: React.FC = () => {
         setIsLoading(true);
         try {
             if (editingLabelId) {
-                await api.updateLabel(editingLabelId, { name: newName }, user as User);
+                await api.updateLabel(editingLabelId, { name: newName, maxArtists }, user as User);
                 const admin = await api.getLabelAdmin(editingLabelId);
                 if (admin) {
                     await api.updateUserPermissions(admin.id, permissions, user as User);
+                    if (adminName !== admin.name) {
+                        await api.updateUser(admin.id, { name: adminName });
+                    }
                 }
                 setSubLabels(prev => prev.map(l => l.id === editingLabelId ? { ...l, name: newName } : l));
                 setIsModalOpen(false);
             } else {
                 const result = await api.createLabel({
                     name: newName,
+                    adminName: adminName,
                     adminEmail: newEmail,
                     permissions,
+                    maxArtists,
                     parentLabelId: user.labelId
                 });
                 setNewLabelInfo(result);
                 setSubLabels(prev => [...prev, result.label]);
             }
         } catch (error) {
-            alert('Protocol error during synchronization.');
+            showToast('Protocol error during synchronization.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSendResetEmail = async () => {
+        if (!editingLabelId) return;
+        setIsLoading(true);
+        try {
+            const admin = await api.getLabelAdmin(editingLabelId);
+            if (admin && admin.email) {
+                await api.sendPasswordResetEmail(admin.email);
+                showToast(`Security reset link dispatched to ${admin.email}.`, 'success');
+            }
+        } catch (error) {
+            showToast('Security protocol failure.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -112,7 +138,7 @@ const SubLabels: React.FC = () => {
                     <h1 className="text-3xl font-black text-white uppercase tracking-tight">Child Nodes</h1>
                     <p className="text-gray-500 mt-1 font-medium">Administration of partner labels and authority protocols.</p>
                 </div>
-                <Button onClick={() => { setEditingLabelId(null); setNewLabelInfo(null); setNewName(''); setNewEmail(''); setIsModalOpen(true); }} className="px-10 h-12 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary/20">Onboard Child Label</Button>
+                <Button onClick={() => { setEditingLabelId(null); setNewLabelInfo(null); setNewName(''); setAdminName(''); setNewEmail(''); setMaxArtists(10); setIsModalOpen(true); }} className="px-10 h-12 text-[10px] font-black uppercase tracking-widest shadow-xl shadow-primary/20">Onboard Child Label</Button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -154,9 +180,41 @@ const SubLabels: React.FC = () => {
                             <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest border-b border-white/5 pb-3">Node Registry</h4>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Input label="Sub-Label Commercial Name" value={newName} onChange={e => setNewName(e.target.value)} required className="h-14 bg-black/40" />
+                                <Input label="Lead Admin Name" value={adminName} onChange={e => setAdminName(e.target.value)} required className="h-14 bg-black/40" />
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Input label="Admin Auth Endpoint" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required disabled={!!editingLabelId} className="h-14 bg-black/40" />
                             </div>
+                            <div className="space-y-2">
+                                <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">Artist Limit</label>
+                                <select
+                                    value={maxArtists}
+                                    onChange={e => setMaxArtists(parseInt(e.target.value))}
+                                    className="w-full bg-black/40 border border-gray-600 rounded-xl px-4 py-4 text-sm font-black text-white h-14 appearance-none"
+                                >
+                                    <option value={1}>1 Artist</option>
+                                    <option value={2}>2 Artists</option>
+                                    <option value={5}>5 Artists</option>
+                                    <option value={10}>10 Artists</option>
+                                    <option value={20}>20 Artists</option>
+                                    <option value={50}>50 Artists</option>
+                                    <option value={100}>100 Artists</option>
+                                    <option value={0}>Unlimited</option>
+                                </select>
+                            </div>
                         </div>
+
+                        {editingLabelId && (
+                            <div className="p-6 bg-primary/5 border border-primary/10 rounded-2xl space-y-4">
+                                <div className="flex justify-between items-center">
+                                    <div>
+                                        <p className="text-xs text-white font-black uppercase">Security Protocol</p>
+                                        <p className="text-[8px] text-gray-600 uppercase font-bold mt-1">Dispatch a secure password reset link to the lead admin.</p>
+                                    </div>
+                                    <Button type="button" variant="secondary" onClick={handleSendResetEmail} disabled={isLoading} className="px-6 py-2 text-[9px] font-black uppercase border-primary/20 text-primary hover:bg-primary/10">Send Reset Link</Button>
+                                </div>
+                            </div>
+                        )}
                         
                         <div className="space-y-6">
                             <h4 className="text-[10px] font-black text-gray-600 uppercase tracking-widest border-b border-white/5 pb-3">Authority Delegation</h4>

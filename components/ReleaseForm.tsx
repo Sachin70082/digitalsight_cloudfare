@@ -4,10 +4,8 @@ import { AppContext } from '../App';
 import { Release, Track, ReleaseType, Artist, ReleaseStatus, Label } from '../types';
 import { Button, Input, Textarea, Spinner } from './ui';
 import { SparklesIcon, UploadIcon, XCircleIcon, MusicIcon, CheckCircleIcon } from './Icons';
-import { generateReleaseDescription } from '../services/geminiService';
 import { api } from '../services/mockApi';
-import { storage } from '../services/firebase';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { r2Service } from '../services/r2Service';
 import ArtistSelector from './ArtistSelector';
 
 interface ReleaseFormProps {
@@ -204,19 +202,13 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             setProgressStatus(`Renaming & Uploading Artwork...`);
             const ext = stagedArtwork.name.split('.').pop() || 'jpg';
             const newArtName = `${safeReleaseTitle}_cover.${ext}`;
-            const artRef = ref(storage, `releases/${releaseId}/artwork/${newArtName}`);
             
-            const uploadTask = uploadBytesResumable(artRef, stagedArtwork);
-            await new Promise((resolve, reject) => {
-                uploadTask.on('state_changed', 
-                    (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 20)),
-                    reject, 
-                    async () => {
-                        finalArtworkUrl = await getDownloadURL(artRef);
-                        resolve(null);
-                    }
-                );
-            });
+            finalArtworkUrl = await r2Service.uploadFile(
+                stagedArtwork,
+                `releases/${releaseId}/artwork`,
+                newArtName,
+                (p) => setUploadProgress(Math.round(p * 0.2))
+            );
         }
 
         for (let i = 0; i < updatedTracks.length; i++) {
@@ -228,26 +220,22 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 
                 setProgressStatus(`Uploading Track ${track.trackNumber}...`);
                 
-                const audioRef = ref(storage, `releases/${releaseId}/audio/${track.id}/${newAudioName}`);
-                const uploadTask = uploadBytesResumable(audioRef, file);
-                
-                await new Promise((resolve, reject) => {
-                    uploadTask.on('state_changed', 
-                        (snap) => {
-                            const totalAudioSteps = 80;
-                            const trackWeight = totalAudioSteps / updatedTracks.length;
-                            const currentTrackBase = 20 + (i * trackWeight);
-                            const trackProgress = (snap.bytesTransferred / snap.totalBytes) * trackWeight;
-                            setUploadProgress(Math.round(currentTrackBase + trackProgress));
-                        },
-                        reject,
-                        async () => {
-                            updatedTracks[i].audioUrl = await getDownloadURL(audioRef);
-                            updatedTracks[i].audioFileName = newAudioName;
-                            resolve(null);
-                        }
-                    );
-                });
+                const totalAudioSteps = 80;
+                const trackWeight = totalAudioSteps / updatedTracks.length;
+                const currentTrackBase = 20 + (i * trackWeight);
+
+                const audioUrl = await r2Service.uploadFile(
+                    file,
+                    `releases/${releaseId}/audio/${track.id}`,
+                    newAudioName,
+                    (p) => {
+                        const trackProgress = (p / 100) * trackWeight;
+                        setUploadProgress(Math.round(currentTrackBase + trackProgress));
+                    }
+                );
+
+                updatedTracks[i].audioUrl = audioUrl;
+                updatedTracks[i].audioFileName = newAudioName;
             }
         }
 
@@ -385,17 +373,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         </div>
                          <div className="relative">
                             <Textarea label="Production Description" rows={4} placeholder="Describe this session..." value={formData.description} onChange={e => handleChange('description', e.target.value)} />
-                            <Button type="button" onClick={async () => {
-                                const primaryIds = formData.primaryArtistIds || [];
-                                const artist = labelArtists.find(a => a.id === primaryIds[0]);
-                                if (!formData.title || !artist) return alert('Enter Title and Primary Artist');
-                                setIsGenerating(true);
-                                const desc = await generateReleaseDescription(artist.name, formData.title);
-                                handleChange('description', desc);
-                                setIsGenerating(false);
-                            }} disabled={isGenerating} className="absolute bottom-3 right-3 text-[9px] py-1.5 px-3">
-                                {isGenerating ? <Spinner className="h-3 w-3"/> : <div className="flex items-center gap-2"><SparklesIcon className="w-3 h-3"/> AI Synthesis</div>}
-                            </Button>
                         </div>
                     </div>
                 )}

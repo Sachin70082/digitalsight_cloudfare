@@ -122,7 +122,7 @@ const ReleaseList: React.FC = () => {
 
     const filteredReleases = useMemo(() => {
         return releases.filter(release => {
-            if (isPlatformSide && release.status === ReleaseStatus.NEEDS_INFO) return false;
+            if (isPlatformSide && (release.status === ReleaseStatus.NEEDS_INFO || release.status === ReleaseStatus.DRAFT)) return false;
 
             const primaryIds = release.primaryArtistIds || [];
             const artistName = primaryIds.length > 0 ? (artists.get(primaryIds[0])?.name || '') : '';

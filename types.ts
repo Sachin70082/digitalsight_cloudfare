@@ -101,6 +101,7 @@ export interface Label {
   website?: string;
   phone?: string;
   revenueShare?: number; // e.g., 70 for 70% to label
+  maxArtists?: number; // Maximum artists allowed for this label
   status?: 'Active' | 'Suspended';
   createdAt?: string;
 }

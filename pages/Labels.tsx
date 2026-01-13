@@ -39,6 +39,7 @@ const Labels: React.FC = () => {
         website: '',
         phone: '',
         revenueShare: 70,
+        maxArtists: 10,
         parentLabelId: ''
     });
 
@@ -86,13 +87,18 @@ const Labels: React.FC = () => {
                     taxId: formData.taxId,
                     website: formData.website,
                     phone: formData.phone,
-                    revenueShare: formData.revenueShare
+                    revenueShare: formData.revenueShare,
+                    maxArtists: formData.maxArtists
                 }, currentUser);
                 
                 // Update permissions for label admin
                 const admin = await api.getLabelAdmin(editingLabelId);
                 if (admin) {
                     await api.updateUserPermissions(admin.id, permissions, currentUser);
+                    // Update admin name if changed
+                    if (formData.adminName !== admin.name) {
+                        await api.updateUser(admin.id, { name: formData.adminName });
+                    }
                 }
                 
                 showToast(`Node "${formData.name}" configuration synchronized.`, 'success');
@@ -140,7 +146,7 @@ const Labels: React.FC = () => {
         setFormData({
             name: '', adminName: '', adminEmail: '', adminPassword: '',
             address: '', city: '', country: '', taxId: '', website: '', phone: '',
-            revenueShare: 70, parentLabelId: ''
+            revenueShare: 70, maxArtists: 10, parentLabelId: ''
         });
         setPermissions({
             canManageArtists: true,
@@ -174,6 +180,7 @@ const Labels: React.FC = () => {
                 website: label.website || '',
                 phone: label.phone || '',
                 revenueShare: label.revenueShare || 70,
+                maxArtists: label.maxArtists || 10,
                 parentLabelId: label.parentLabelId || ''
             });
             
@@ -187,6 +194,24 @@ const Labels: React.FC = () => {
             setIsModalOpen(true);
         } catch (e) {
             showToast('Failed to load node authority data.', 'error');
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleSendResetEmail = async () => {
+        if (!editingLabelId) return;
+        setIsLoading(true);
+        try {
+            const admin = await api.getLabelAdmin(editingLabelId);
+            if (admin && admin.email) {
+                await api.sendPasswordResetEmail(admin.email);
+                showToast(`Security reset link dispatched to ${admin.email}.`, 'success');
+            } else {
+                showToast('No administrative authority found for this node.', 'error');
+            }
+        } catch (e) {
+            showToast('Failed to dispatch security reset link.', 'error');
         } finally {
             setIsLoading(false);
         }
@@ -207,7 +232,9 @@ const Labels: React.FC = () => {
 
     if (isLoading && labels.length === 0) return <PageLoader />;
 
-    const canManage = currentUser?.role === UserRole.OWNER || currentUser?.designation === "Co-Founder / Operations Head";
+    const canManage = currentUser?.role === UserRole.OWNER ||
+                      currentUser?.designation === "Co-Founder / Operations Head" ||
+                      currentUser?.permissions?.canOnboardLabels;
 
     return (
         <div className="space-y-8 animate-fade-in pb-20">
@@ -300,7 +327,7 @@ const Labels: React.FC = () => {
                             <div className="space-y-8 animate-fade-in">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <Input label="Registry Title" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} required className="h-14 bg-black/40" />
-                                    <Input label="Lead Admin Name" value={formData.adminName} onChange={e => setFormData({...formData, adminName: e.target.value})} required className="h-14 bg-black/40" disabled={!!editingLabelId} />
+                                    <Input label="Lead Admin Name" value={formData.adminName} onChange={e => setFormData({...formData, adminName: e.target.value})} required className="h-14 bg-black/40" />
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <Input label="Lead Admin Email" type="email" value={formData.adminEmail} onChange={e => setFormData({...formData, adminEmail: e.target.value})} required className="h-14 bg-black/40" disabled={!!editingLabelId} />
@@ -308,6 +335,17 @@ const Labels: React.FC = () => {
                                         <Input label="Initial Vault Key" type="text" value={formData.adminPassword} onChange={e => setFormData({...formData, adminPassword: e.target.value})} placeholder="Auto-generated if blank" className="h-14 bg-black/40" />
                                     )}
                                 </div>
+                                {editingLabelId && (
+                                    <div className="p-6 bg-primary/5 border border-primary/10 rounded-2xl space-y-4">
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="text-xs text-white font-black uppercase">Security Protocol</p>
+                                                <p className="text-[9px] text-gray-500 font-bold uppercase mt-1">Dispatch a secure password reset link to the lead admin.</p>
+                                            </div>
+                                            <Button type="button" variant="secondary" onClick={handleSendResetEmail} disabled={isLoading} className="px-6 py-2 text-[9px] font-black uppercase border-primary/20 text-primary hover:bg-primary/10">Send Reset Link</Button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
 
@@ -319,6 +357,23 @@ const Labels: React.FC = () => {
                                     <div className="space-y-2">
                                         <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">Revenue Net Share (%)</label>
                                         <input type="number" value={formData.revenueShare} onChange={e => setFormData({...formData, revenueShare: parseInt(e.target.value)})} className="w-full bg-black/40 border border-gray-600 rounded-xl px-4 py-4 text-sm font-black text-white h-14" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">Artist Limit</label>
+                                        <select
+                                            value={formData.maxArtists}
+                                            onChange={e => setFormData({...formData, maxArtists: parseInt(e.target.value)})}
+                                            className="w-full bg-black/40 border border-gray-600 rounded-xl px-4 py-4 text-sm font-black text-white h-14 appearance-none"
+                                        >
+                                            <option value={1}>1 Artist</option>
+                                            <option value={2}>2 Artists</option>
+                                            <option value={5}>5 Artists</option>
+                                            <option value={10}>10 Artists</option>
+                                            <option value={20}>20 Artists</option>
+                                            <option value={50}>50 Artists</option>
+                                            <option value={100}>100 Artists</option>
+                                            <option value={0}>Unlimited</option>
+                                        </select>
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

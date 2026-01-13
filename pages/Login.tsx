@@ -1,6 +1,7 @@
 
 import React, { useState, useContext } from 'react';
 import { AppContext } from '../App';
+import { api } from '../services/mockApi';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Spinner } from '../components/ui';
 
 const Login: React.FC = () => {
@@ -11,6 +12,7 @@ const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [isForgotMode, setIsForgotMode] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
 
   const [founderName, setFounderName] = useState('');
   const [founderDesignation, setFounderDesignation] = useState('Founder / CEO');
@@ -45,13 +47,17 @@ const Login: React.FC = () => {
       setIsLoading(false);
   };
 
-  const handleForgot = (e: React.FormEvent) => {
+  const handleForgot = async (e: React.FormEvent) => {
       e.preventDefault();
       setIsLoading(true);
-      setTimeout(() => {
+      setError('');
+      try {
+          await api.sendPasswordResetEmail(forgotEmail);
           setResetSent(true);
-          setIsLoading(false);
-      }, 1000);
+      } catch (err: any) {
+          setError(err.message || 'Failed to transmit recovery link.');
+      }
+      setIsLoading(false);
   };
 
   if (pendingFounder) {
@@ -226,7 +232,21 @@ const Login: React.FC = () => {
                                 <h3 className="text-2xl font-black text-white uppercase tracking-tight">Recover Access</h3>
                                 <p className="text-base text-gray-500 font-medium leading-relaxed">Enter your registered organizational email. We will transmit restoration instructions via encrypted endpoint.</p>
                             </div>
-                            <Input label="Registered Domain Email" type="email" required placeholder="your@email.com" className="h-16 bg-black/40 border-gray-800 text-base rounded-2xl" />
+                            <Input
+                                label="Registered Domain Email"
+                                type="email"
+                                required
+                                value={forgotEmail}
+                                onChange={(e) => setForgotEmail(e.target.value)}
+                                placeholder="your@email.com"
+                                className="h-16 bg-black/40 border-gray-800 text-base rounded-2xl"
+                            />
+                            {error && (
+                                <div className="bg-red-500/10 border border-red-500/20 p-5 rounded-2xl flex items-start gap-4 animate-shake">
+                                    <svg className="w-6 h-6 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                    <p className="text-red-500 text-sm font-bold leading-tight">{error}</p>
+                                </div>
+                            )}
                             <div className="flex flex-col gap-4 pt-4">
                                 <Button type="submit" disabled={isLoading} className="h-16 text-[11px] font-black uppercase tracking-[0.25em] rounded-2xl shadow-xl shadow-primary/20">
                                     {isLoading ? <Spinner className="w-6 h-6" /> : 'Transmit Recovery Link'}

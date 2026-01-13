@@ -482,7 +482,7 @@ const ReleaseReview: React.FC = () => {
                         <Button 
                             className="flex-1 rounded-xl text-[10px] font-black uppercase shadow-xl shadow-primary/30" 
                             disabled={isProcessing}
-                            onClick={() => handleStatusChange(ReleaseStatus.PUBLISHED, "Distribution protocol authorized: Node published.")}
+                            onClick={() => handleStatusChange(ReleaseStatus.PUBLISHED, "Album published.")}
                         >
                             {isProcessing ? <Spinner className="w-5 h-5" /> : 'Authorize Ingest'}
                         </Button>

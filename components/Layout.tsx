@@ -21,7 +21,7 @@ const HubMenu: React.FC = () => {
     }, []);
 
     const hubItems = [
-        { name: 'Financials', icon: <CashIcon className="w-5 h-5" />, path: '/accounting', color: 'text-primary' },
+        { name: 'Financials', icon: <CashIcon className="w-5 h-5" />, path: '#', color: 'text-primary' },
         { name: 'Customer Support', icon: <SupportIcon className="w-5 h-5" />, path: '/support', color: 'text-blue-400', external: true },
         { name: 'FAQ & Docs', icon: <QuestionMarkIcon className="w-5 h-5" />, path: '/faq', color: 'text-purple-400', external: true },
     ];
@@ -60,8 +60,11 @@ const HubMenu: React.FC = () => {
                                 <Link
                                     key={item.name}
                                     to={item.path}
-                                    onClick={() => setIsOpen(false)}
-                                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors group"
+                                    onClick={(e) => {
+                                        if (item.path === '#') e.preventDefault();
+                                        setIsOpen(false);
+                                    }}
+                                    className={`flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-800 transition-colors group ${item.path === '#' ? 'cursor-default opacity-50' : ''}`}
                                 >
                                     <span className={`${item.color} group-hover:scale-110 transition-transform`}>{item.icon}</span>
                                     <span className="text-xs font-semibold text-gray-300 group-hover:text-white">{item.name}</span>

@@ -54,6 +54,16 @@ const ArtistForm: React.FC<{
                 showToast(`Profile for ${name} updated successfully.`, 'success');
                 onSave({ artist: updatedArtist });
             } else {
+                // Check artist limit
+                const targetLabel = hierarchyLabels.find(l => l.id === targetLabelId);
+                if (targetLabel && targetLabel.maxArtists !== undefined && targetLabel.maxArtists !== 0) {
+                    const allArtists = await api.getAllArtists();
+                    const currentCount = allArtists.filter(a => a.labelId === targetLabelId).length;
+                    if (currentCount >= targetLabel.maxArtists) {
+                        throw new Error(`Artist limit reached for this label (${targetLabel.maxArtists}). Please contact support to upgrade.`);
+                    }
+                }
+
                 const result = await api.addArtist(artistData);
                 showToast(`New artist ${name} onboarded.`, 'success');
                 onSave(result);
