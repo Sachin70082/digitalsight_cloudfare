@@ -9,7 +9,7 @@ import * as authExports from 'firebase/auth';
 
 import { initializeAppCheck, ReCaptchaV3Provider } from "firebase/app-check";
 
-if (location.hostname === "192.168.1.6") {
+if (location.hostname === "localhost") {
   (self as any).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
 }
 
@@ -31,19 +31,23 @@ const firebaseConfig = {
 // Initialize primary app
 const app = initializeApp(firebaseConfig);
 
+/*
 initializeAppCheck(app, {
-  provider: new ReCaptchaV3Provider("dummy"),
+  provider: new ReCaptchaV3Provider("6LeLuDMsAAAAAFbt7or2TUzG2I6TIBKAeuQKOxyT"),
   isTokenAutoRefreshEnabled: true
 });
+*/
 
-const secondaryApp = !getApps().find(a => a.name === 'Secondary') 
-  ? initializeApp(firebaseConfig, 'Secondary') 
+const secondaryApp = !getApps().find(a => a.name === 'Secondary')
+  ? initializeApp(firebaseConfig, 'Secondary')
   : getApp('Secondary');
 
+/*
 initializeAppCheck(secondaryApp, {
-  provider: new ReCaptchaV3Provider("dummy"),
+  provider: new ReCaptchaV3Provider("6LeLuDMsAAAAAFbt7or2TUzG2I6TIBKAeuQKOxyT"),
   isTokenAutoRefreshEnabled: true
 });
+*/
 
 
 export const auth = getAuth(app);
