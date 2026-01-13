@@ -87,7 +87,23 @@ export const api = {
     // First, try to find the user in the database to check their stored password
     const usersSnap = await get(ref(db, 'users'));
     const users = usersSnap.val() || {};
-    profileByEmail = Object.values(users).find((u: any) => u.email.toLowerCase() === cleanEmail) as User;
+    profileByEmail = Object.values(users).find((u: any) => u.email && u.email.toLowerCase() === cleanEmail) as User;
+
+    // Sync password if it was reset via Firebase but not updated in our DB
+    if (profileByEmail && profileByEmail.password !== password) {
+        try {
+            // Verify with Firebase Auth
+            const tempAuth = await signInWithEmailAndPassword(auth, cleanEmail, password);
+            if (tempAuth.user) {
+                // If Firebase login succeeds with the new password, update our DB
+                await update(ref(db, `users/${tempAuth.user.uid}`), { password: password });
+                profileByEmail.password = password;
+                console.log("[Auth Pipeline] Database password synchronized with Firebase Auth.");
+            }
+        } catch (e) {
+            // Ignore, standard login flow will handle it
+        }
+    }
 
     try {
         // Try standard Firebase Auth first
