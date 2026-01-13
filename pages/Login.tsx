@@ -1,11 +1,13 @@
 
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useCallback } from 'react';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Spinner } from '../components/ui';
 
 const Login: React.FC = () => {
   const { login, pendingFounder, completeFounderSetup } = useContext(AppContext);
+  const { executeRecaptcha } = useGoogleReCaptcha();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -17,11 +19,23 @@ const Login: React.FC = () => {
   const [founderName, setFounderName] = useState('');
   const [founderDesignation, setFounderDesignation] = useState('Founder / CEO');
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!executeRecaptcha) {
+      setError('Security protocol not initialized.');
+      return;
+    }
+
     setIsLoading(true);
     setError('');
+
     try {
+      const token = await executeRecaptcha('login');
+      if (!token) {
+        throw new Error('Security verification failed.');
+      }
+      
       await login(email, password);
     } catch (err: any) {
       let message = 'Access Denied. Check your credentials.';
@@ -34,7 +48,7 @@ const Login: React.FC = () => {
       setError(message);
     }
     setIsLoading(false);
-  };
+  }, [email, password, login, executeRecaptcha]);
 
   const handleFounderSetup = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -189,6 +203,9 @@ const Login: React.FC = () => {
                               required
                               className="h-16 pl-14 bg-black/40 border-gray-800 focus:border-primary text-base placeholder:text-gray-700 transition-all rounded-2xl"
                             />
+                            <div className="flex justify-center py-2">
+                                <p className="text-[9px] text-gray-600 font-bold uppercase tracking-widest">Protected by Enterprise Security</p>
+                            </div>
                         </div>
                     </div>
 

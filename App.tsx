@@ -1,6 +1,7 @@
 
 import React, { useState, createContext, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
 // @fix: Use import type for User as it's not exported as a value in the current firebase/auth build
@@ -136,6 +137,7 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={{ user, pendingFounder, login, completeFounderSetup, logout, showToast }}>
+      <GoogleReCaptchaProvider reCaptchaKey="6LeLuDMsAAAAAFbt7or2TUzG2I6TIBKAeuQKOxyT">
       <BrowserRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
         <Routes>
@@ -191,6 +193,7 @@ const App: React.FC = () => {
           )}
         </Routes>
       </BrowserRouter>
+      </GoogleReCaptchaProvider>
     </AppContext.Provider>
   );
 };
