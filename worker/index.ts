@@ -839,7 +839,7 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
                                     <p>Please log in to the portal to address these issues and resubmit the release.</p>
                                     
                                     <div style="text-align: center;">
-                                        <a href="https://app.digitalsight.in/releases/${id}" class="button">Fix Metadata</a>
+                                        <a href="https://app.digitalsight.in/releases/${id}" class="button" style="color: white; text-decoration: none;">Fix Metadata</a>
                                     </div>
                                 </div>
                                 <div class="footer">
