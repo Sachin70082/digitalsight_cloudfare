@@ -1,5 +1,5 @@
 
-import React, { useState, useContext, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useContext, useCallback, useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Spinner } from '../components/ui';
@@ -10,7 +10,11 @@ declare global {
   }
 }
 
-const Turnstile: React.FC<{ siteKey: string; onSuccess: (token: string) => void }> = ({ siteKey, onSuccess }) => {
+export interface TurnstileInstance {
+  reset: () => void;
+}
+
+const Turnstile = forwardRef<TurnstileInstance, { siteKey: string; onSuccess: (token: string) => void }>(({ siteKey, onSuccess }, ref) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | null>(null);
   const onSuccessRef = useRef(onSuccess);
@@ -18,6 +22,18 @@ const Turnstile: React.FC<{ siteKey: string; onSuccess: (token: string) => void 
   useEffect(() => {
     onSuccessRef.current = onSuccess;
   }, [onSuccess]);
+
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.reset(widgetIdRef.current);
+        } catch (e) {
+          console.error('Turnstile reset error:', e);
+        }
+      }
+    }
+  }));
 
   useEffect(() => {
     let isMounted = true;
@@ -59,7 +75,7 @@ const Turnstile: React.FC<{ siteKey: string; onSuccess: (token: string) => void 
   }, [siteKey]); // Only re-run if siteKey changes
 
   return <div ref={containerRef} />;
-};
+});
 
 const Login: React.FC = () => {
   const { login } = useContext(AppContext);
@@ -73,6 +89,7 @@ const Login: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,6 +110,9 @@ const Login: React.FC = () => {
           message = err.message;
       }
       setError(message);
+      // Reset Turnstile on failure
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     }
     setIsLoading(false);
   }, [email, password, login, turnstileToken]);
@@ -215,6 +235,7 @@ const Login: React.FC = () => {
                         
                         <div className="flex justify-center">
                             <Turnstile 
+                                ref={turnstileRef}
                                 siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
                                 onSuccess={setTurnstileToken}
                             />
