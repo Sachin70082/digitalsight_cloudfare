@@ -106,6 +106,7 @@ export interface Label {
   maxArtists?: number; // Maximum artists allowed for this label
   status?: 'Active' | 'Suspended';
   createdAt?: string;
+  ownerEmail?: string; // Added for admin view
 }
 
 export enum ArtistType {

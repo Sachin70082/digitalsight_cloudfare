@@ -134,6 +134,11 @@ export const PageLoader: React.FC = () => (
     </div>
 );
 
+// --- Skeleton ---
+export const Skeleton: React.FC<{ className?: string }> = ({ className = '' }) => (
+    <div className={`animate-pulse bg-white/10 rounded ${className}`}></div>
+);
+
 // --- Table ---
 export const Table: React.FC<{ children: ReactNode, className?: string }> = ({ children, className = '' }) => (
     <div className={`overflow-x-auto custom-scrollbar ${className}`}>

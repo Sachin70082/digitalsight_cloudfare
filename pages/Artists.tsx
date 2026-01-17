@@ -155,14 +155,15 @@ const Artists: React.FC = () => {
         try {
             if (user?.role === UserRole.OWNER) {
                 const data = await api.getAllArtists();
-                setArtists(data);
+                setArtists(Array.isArray(data) ? data : []);
             } else if (user?.labelId) {
                 // api.getArtistsByLabel is now hierarchical
                 const data = await api.getArtistsByLabel(user.labelId);
-                setArtists(data);
+                setArtists(Array.isArray(data) ? data : []);
             }
         } catch (err: any) {
             showToast('Failed to load artist catalog.', 'error');
+            setArtists([]);
         } finally {
             setIsLoading(false);
         }
@@ -178,17 +179,19 @@ const Artists: React.FC = () => {
     }, [filter]);
 
     const handleArtistSaved = (result: {artist: Artist, user?: User}) => {
-        if (editingArtist) {
-            setArtists(prev => prev.map(a => a.id === result.artist.id ? result.artist : a).sort((a, b) => a.name.localeCompare(b.name)));
-            setIsModalOpen(false);
-            setEditingArtist(null);
-        } else {
-            setArtists(prev => [...prev, result.artist].sort((a, b) => a.name.localeCompare(b.name)));
-            if (result.user) {
-                setNewCredentials(result.user);
-            } else {
-                setJustCreated(result.artist);
-            }
+        // Refresh the entire list from the server to ensure we have the correct data
+        fetchArtists();
+        
+        // Close modal and reset states
+        setIsModalOpen(false);
+        setEditingArtist(null);
+        setNewCredentials(null);
+        setJustCreated(null);
+        
+        if (!editingArtist && result.user) {
+            showToast(`Artist created. Password: ${result.user.password}`, 'success');
+        } else if (editingArtist) {
+            showToast(`Artist profile updated.`, 'success');
         }
     };
 
@@ -222,10 +225,10 @@ const Artists: React.FC = () => {
 
     const filteredArtists = useMemo(() => {
         return artists.filter(artist =>
-            artist.name.toLowerCase().includes(filter.toLowerCase()) ||
-            artist.type.toLowerCase().includes(filter.toLowerCase()) ||
-            (artist.id && artist.id.toLowerCase().includes(filter.toLowerCase()))
-        ).sort((a, b) => a.name.localeCompare(b.name));
+            (artist?.name?.toLowerCase() || '').includes(filter.toLowerCase()) ||
+            (artist?.type?.toLowerCase() || '').includes(filter.toLowerCase()) ||
+            (artist?.id && artist.id.toLowerCase().includes(filter.toLowerCase()))
+        ).sort((a, b) => (a?.name || '').localeCompare(b?.name || ''));
     }, [artists, filter]);
 
     const paginatedArtists = useMemo(() => {
@@ -278,25 +281,25 @@ const Artists: React.FC = () => {
                                 </TD>
                             </TR>
                         ) : paginatedArtists.map(artist => (
-                            <TR key={artist.id}>
+                            <TR key={artist?.id || Math.random().toString()}>
                                 <TD>
                                     <div className="flex items-center gap-4">
                                         <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark text-black rounded-xl flex items-center justify-center font-black shadow-lg shadow-primary/10">
-                                            {artist.name.charAt(0)}
+                                            {(artist?.name || '?').charAt(0)}
                                         </div>
                                         <div>
-                                            <p className="font-black text-white group-hover:text-primary transition-colors tracking-tight uppercase text-sm">{artist.name}</p>
-                                            <p className="text-[9px] text-gray-600 font-mono mt-0.5 tracking-tighter uppercase">NODE ID: {artist.id?.toUpperCase() || 'UNKNOWN'}</p>
+                                            <p className="font-black text-white group-hover:text-primary transition-colors tracking-tight uppercase text-sm">{artist?.name || 'Unknown Artist'}</p>
+                                            <p className="text-[9px] text-gray-600 font-mono mt-0.5 tracking-tighter uppercase">NODE ID: {artist?.id?.toUpperCase() || 'UNKNOWN'}</p>
                                         </div>
                                     </div>
                                 </TD>
-                                <TD className="text-[11px] font-black uppercase tracking-widest text-gray-400">{artist.type}</TD>
-                                <TD className="text-[11px] font-mono text-gray-500">{artist.email || <span className="text-gray-700 opacity-50 font-sans font-bold">REDACTED</span>}</TD>
+                                <TD className="text-[11px] font-black uppercase tracking-widest text-gray-400">{artist?.type || 'UNKNOWN'}</TD>
+                                <TD className="text-[11px] font-mono text-gray-500">{artist?.email || <span className="text-gray-700 opacity-50 font-sans font-bold">REDACTED</span>}</TD>
                                 <TD>
                                     <div className="flex gap-2">
-                                        {artist.spotifyId && <span className="text-[9px] bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20 font-black uppercase tracking-widest">Spotify</span>}
-                                        {artist.appleMusicId && <span className="text-[9px] bg-red-500/10 text-red-500 px-2.5 py-1 rounded-full border border-red-500/20 font-black uppercase tracking-widest">Apple</span>}
-                                        {artist.instagramUrl && <span className="text-[9px] bg-purple-500/10 text-purple-500 px-2.5 py-1 rounded-full border border-purple-500/20 font-black uppercase tracking-widest">Social</span>}
+                                        {artist?.spotifyId && <span className="text-[9px] bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20 font-black uppercase tracking-widest">Spotify</span>}
+                                        {artist?.appleMusicId && <span className="text-[9px] bg-red-500/10 text-red-500 px-2.5 py-1 rounded-full border border-red-500/20 font-black uppercase tracking-widest">Apple</span>}
+                                        {artist?.instagramUrl && <span className="text-[9px] bg-purple-500/10 text-purple-500 px-2.5 py-1 rounded-full border border-purple-500/20 font-black uppercase tracking-widest">Social</span>}
                                     </div>
                                 </TD>
                                 <TD className="text-right">

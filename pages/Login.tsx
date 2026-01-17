@@ -1,15 +1,71 @@
 
-import React, { useState, useContext, useCallback } from 'react';
-import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
+import React, { useState, useContext, useCallback, useEffect, useRef } from 'react';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Spinner } from '../components/ui';
 
+declare global {
+  interface Window {
+    turnstile: any;
+  }
+}
+
+const Turnstile: React.FC<{ siteKey: string; onSuccess: (token: string) => void }> = ({ siteKey, onSuccess }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const widgetIdRef = useRef<string | null>(null);
+  const onSuccessRef = useRef(onSuccess);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const renderWidget = () => {
+      if (window.turnstile && containerRef.current && !widgetIdRef.current && isMounted) {
+        try {
+          widgetIdRef.current = window.turnstile.render(containerRef.current, {
+            sitekey: siteKey,
+            callback: (token: string) => onSuccessRef.current(token),
+          });
+        } catch (e) {
+          console.error('Turnstile render error:', e);
+        }
+      }
+    };
+
+    if (window.turnstile) {
+      renderWidget();
+    } else {
+      const checkInterval = setInterval(() => {
+        if (window.turnstile) {
+          renderWidget();
+          clearInterval(checkInterval);
+        }
+      }, 500);
+      return () => clearInterval(checkInterval);
+    }
+
+    return () => {
+      isMounted = false;
+      if (widgetIdRef.current && window.turnstile) {
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch (e) {}
+        widgetIdRef.current = null;
+      }
+    };
+  }, [siteKey]); // Only re-run if siteKey changes
+
+  return <div ref={containerRef} />;
+};
+
 const Login: React.FC = () => {
-  const { login, pendingFounder, completeFounderSetup } = useContext(AppContext);
-  const { executeRecaptcha } = useGoogleReCaptcha();
+  const { login } = useContext(AppContext);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isForgotMode, setIsForgotMode] = useState(false);
@@ -17,15 +73,12 @@ const Login: React.FC = () => {
   const [forgotEmail, setForgotEmail] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
-  
-  const [founderName, setFounderName] = useState('');
-  const [founderDesignation, setFounderDesignation] = useState('Founder / CEO');
 
   const handleLogin = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!executeRecaptcha) {
-      setError('Security protocol not initialized.');
+    if (!turnstileToken) {
+      setError('Please complete the security verification.');
       return;
     }
 
@@ -33,35 +86,16 @@ const Login: React.FC = () => {
     setError('');
 
     try {
-      const token = await executeRecaptcha('login');
-      if (!token) {
-        throw new Error('Security verification failed.');
-      }
-      
-      await login(email, password, token);
+      await login(email, password, turnstileToken);
     } catch (err: any) {
       let message = 'Access Denied. Check your credentials.';
-      // Normalize Firebase v10 combined error codes
-      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-          message = 'The email or password provided is incorrect.';
-      } else if (err.message) {
+      if (err.message) {
           message = err.message;
       }
       setError(message);
     }
     setIsLoading(false);
-  }, [email, password, login, executeRecaptcha]);
-
-  const handleFounderSetup = async (e: React.FormEvent) => {
-      e.preventDefault();
-      setIsLoading(true);
-      try {
-          await completeFounderSetup(founderName, founderDesignation);
-      } catch (err: any) {
-          setError(err.message || 'Setup failed.');
-      }
-      setIsLoading(false);
-  };
+  }, [email, password, login, turnstileToken]);
 
   const handleForgot = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -75,54 +109,6 @@ const Login: React.FC = () => {
       }
       setIsLoading(false);
   };
-
-  if (pendingFounder) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-900 p-6">
-          <Card className="w-[95%] max-w-lg border-primary/20 bg-gray-800/50 backdrop-blur-2xl shadow-2xl overflow-hidden rounded-[2rem] p-0">
-            <CardHeader className="text-center pt-8 sm:pt-12 border-none">
-              <div className="w-16 h-16 sm:w-20 sm:h-20 bg-primary text-black rounded-2xl sm:rounded-3xl flex items-center justify-center mx-auto mb-6 sm:mb-8 shadow-[0_0_40px_rgba(29,185,84,0.3)]">
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
-              </div>
-              <CardTitle className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight">Root Profile Genesis</CardTitle>
-              <div className="mt-4 inline-block bg-primary/10 px-4 py-1.5 rounded-full border border-primary/20">
-                <p className="text-primary text-[10px] font-black uppercase tracking-[0.2em]">{pendingFounder.email}</p>
-              </div>
-            </CardHeader>
-            <CardContent className="pb-10 sm:pb-16 px-6 sm:px-12">
-                <form onSubmit={handleFounderSetup} className="space-y-6 sm:space-y-8">
-                    <p className="text-sm text-gray-400 text-center leading-relaxed">
-                        Security verification successful. Please establish your master administrative identity to access the Digitalsight Core.
-                    </p>
-                    <div className="space-y-6">
-                        <Input 
-                            label="Full Legal Identity" 
-                            required 
-                            value={founderName} 
-                            onChange={e => setFounderName(e.target.value)} 
-                            placeholder="e.g. Alexander Pierce"
-                            className="h-12 sm:h-14 bg-black/40 border-gray-700 text-base"
-                        />
-                        <Input
-                            label="Executive Designation"
-                            required
-                            value={founderDesignation}
-                            onChange={e => setFounderDesignation(e.target.value)}
-                            placeholder="Founder / CEO"
-                            className="h-12 sm:h-14 bg-black/40 border-gray-700 text-base"
-                        />
-                    </div>
-                    <Button type="submit" className="w-full h-14 sm:h-16 text-[11px] font-black uppercase tracking-[0.25em] shadow-2xl shadow-primary/30 rounded-2xl" disabled={isLoading}>
-                      {isLoading ? <Spinner className="w-6 h-6" /> : 'Activate Platform Authority'}
-                    </Button>
-                </form>
-            </CardContent>
-          </Card>
-        </div>
-      );
-  }
 
   return (
     <div className="min-h-screen flex bg-gray-900 text-sans overflow-hidden">
@@ -227,6 +213,13 @@ const Login: React.FC = () => {
                             </div>
                         </div>
                         
+                        <div className="flex justify-center">
+                            <Turnstile 
+                                siteKey={import.meta.env.VITE_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'} 
+                                onSuccess={setTurnstileToken}
+                            />
+                        </div>
+
                         <div className="flex items-center justify-between px-1">
                             <label className="flex items-center gap-3 cursor-pointer group">
                                 <div className="relative flex items-center justify-center">

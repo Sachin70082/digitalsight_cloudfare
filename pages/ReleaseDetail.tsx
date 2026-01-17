@@ -4,8 +4,12 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../services/mockApi';
 import { Release, Track, Artist, Label, InteractionNote, UserRole } from '../types';
 import { AppContext } from '../App';
-import { Badge, Card, CardContent, CardHeader, CardTitle, PageLoader } from '../components/ui';
-import { ArrowLeftIcon, MusicIcon } from '../components/Icons';
+import { Badge, Card, CardContent, CardHeader, CardTitle, Skeleton } from '../components/ui';
+import {
+    ArrowLeftIcon, MusicIcon, SpotifyIcon, AppleMusicIcon, YouTubeMusicIcon,
+    AmazonMusicIcon, JioSaavnIcon, ShazamIcon, TidalIcon, TikTokIcon,
+    FacebookIcon, InstagramIcon, SoundCloudIcon
+} from '../components/Icons';
 
 const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div className="group/meta">
@@ -14,36 +18,42 @@ const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
     </div>
 );
 
-const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => (
-    <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-        {(!notes || notes.length === 0) ? (
-            <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest py-4 text-center">No audit history recorded.</p>
-        ) : notes.map((note) => (
-            <div key={note.id} className={`p-4 rounded-xl border ${
-                note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE
-                    ? 'bg-yellow-900/10 border-yellow-500/20' 
-                    : 'bg-primary/5 border-primary/20'
-            }`}>
-                <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
-                            note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE 
-                            ? 'bg-yellow-500 text-yellow-900' 
-                            : 'bg-primary text-white'
-                        }`}>
-                            {note.authorRole}
+const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => {
+    const sortedNotes = [...(notes || [])].sort((a, b) => 
+        (b.timestamp || '').localeCompare(a.timestamp || '')
+    );
+
+    return (
+        <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+            {(!sortedNotes || sortedNotes.length === 0) ? (
+                <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest py-4 text-center">No audit history recorded.</p>
+            ) : sortedNotes.map((note) => (
+                <div key={note.id} className={`p-4 rounded-xl border ${
+                    note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE
+                        ? 'bg-yellow-900/10 border-yellow-500/20' 
+                        : 'bg-primary/5 border-primary/20'
+                }`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded ${
+                                note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE 
+                                ? 'bg-yellow-500 text-yellow-900' 
+                                : 'bg-primary text-white'
+                            }`}>
+                                {note.authorRole}
+                            </span>
+                            <span className="text-xs text-white font-bold uppercase tracking-tight">{note.authorName || 'Staff'}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {new Date(note.timestamp).toLocaleString()}
                         </span>
-                        <span className="text-xs text-white font-bold uppercase tracking-tight">{note.authorName || 'Staff'}</span>
                     </div>
-                    <span className="text-[10px] text-gray-500 font-mono">
-                        {new Date(note.timestamp).toLocaleString()}
-                    </span>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{note.message}</p>
                 </div>
-                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{note.message}</p>
-            </div>
-        ))}
-    </div>
-);
+            ))}
+        </div>
+    );
+};
 
 const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -54,6 +64,9 @@ const formatDuration = (seconds: number) => {
 const ReleaseDetail: React.FC = () => {
     const { releaseId } = useParams<{ releaseId: string }>();
     const navigate = useNavigate();
+    
+    const { user } = useContext(AppContext);
+    const isStaff = user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE;
     
     const [release, setRelease] = useState<Release | null>(null);
     const [artist, setArtist] = useState<Artist | null>(null);
@@ -68,17 +81,23 @@ const ReleaseDetail: React.FC = () => {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                const [releaseData, fetchedArtists] = await Promise.all([
-                    api.getRelease(releaseId),
-                    api.getAllArtists()
-                ]);
+                const releaseData = await api.getRelease(releaseId);
 
                 if (!releaseData) {
                     setRelease(null);
                     setIsLoading(false);
                     return;
                 }
+                
                 setRelease(releaseData);
+                // Show main data immediately, don't wait for artists/labels
+                setIsLoading(false);
+
+                // Fetch supporting data in background
+                const [fetchedArtists, labelData] = await Promise.all([
+                    api.getAllArtists(),
+                    releaseData.labelId ? api.getLabel(releaseData.labelId) : Promise.resolve(null)
+                ]);
 
                 const artistMap = new Map<string, Artist>();
                 fetchedArtists.forEach(a => artistMap.set(a.id, a));
@@ -89,13 +108,9 @@ const ReleaseDetail: React.FC = () => {
                     setArtist(artistMap.get(primaryIds[0]) || null);
                 }
 
-                if (releaseData.labelId) {
-                     const labelData = await api.getLabel(releaseData.labelId);
-                     setLabel(labelData || null);
-                }
+                setLabel(labelData || null);
             } catch (error) {
                 console.error("Failed to fetch release details", error);
-            } finally {
                 setIsLoading(false);
             }
         };
@@ -103,7 +118,95 @@ const ReleaseDetail: React.FC = () => {
         fetchData();
     }, [releaseId]);
 
-    if (isLoading) return <PageLoader />;
+    if (isLoading) {
+        return (
+            <div className="space-y-8 animate-fade-in w-full pb-20">
+                {/* Header Skeleton */}
+                <div className="flex flex-col md:flex-row justify-between items-start gap-6 border-b border-gray-800 pb-8 px-4">
+                    <div className="flex items-center gap-6">
+                        <Skeleton className="w-12 h-12 rounded-2xl" />
+                        <div>
+                            <Skeleton className="h-10 w-64 mb-2" />
+                            <Skeleton className="h-4 w-48" />
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-2">
+                        <Skeleton className="h-6 w-24 rounded-full" />
+                        <Skeleton className="h-3 w-32" />
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 px-4">
+                    {/* Left Column */}
+                    <div className="lg:col-span-3 space-y-8">
+                        {/* Cover Art Skeleton */}
+                        <Card className="p-0 overflow-hidden border-none bg-transparent shadow-none">
+                             <Skeleton className="w-full aspect-square rounded-[2rem]" />
+                        </Card>
+
+                        {/* Audit History Skeleton */}
+                        <Card>
+                            <CardHeader className="border-b border-gray-800/50">
+                                <Skeleton className="h-4 w-32" />
+                            </CardHeader>
+                            <CardContent className="pt-6 space-y-4">
+                                <Skeleton className="h-24 w-full rounded-xl" />
+                                <Skeleton className="h-24 w-full rounded-xl" />
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Right Column */}
+                    <div className="lg:col-span-9 space-y-8">
+                        {/* Metadata Skeleton */}
+                        <Card>
+                            <CardHeader>
+                                <Skeleton className="h-5 w-48" />
+                            </CardHeader>
+                            <CardContent className="pt-2">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-6">
+                                    {[...Array(8)].map((_, i) => (
+                                        <div key={i} className="space-y-2">
+                                            <Skeleton className="h-3 w-24" />
+                                            <Skeleton className="h-4 w-32" />
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+
+                        {/* Tracklist Skeleton */}
+                        <Card>
+                            <CardHeader>
+                                <Skeleton className="h-5 w-40" />
+                            </CardHeader>
+                            <CardContent className="pt-2 space-y-6">
+                                {[...Array(3)].map((_, i) => (
+                                    <div key={i} className="p-8 bg-white/5 rounded-[2rem] border border-white/5">
+                                        <div className="flex justify-between mb-8">
+                                            <div className="flex gap-6">
+                                                <Skeleton className="w-12 h-12 rounded-2xl" />
+                                                <div className="space-y-2">
+                                                    <Skeleton className="h-8 w-64" />
+                                                    <Skeleton className="h-4 w-48" />
+                                                </div>
+                                            </div>
+                                            <Skeleton className="h-8 w-16" />
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-8">
+                                            <Skeleton className="h-10 w-full" />
+                                            <Skeleton className="h-10 w-full" />
+                                            <Skeleton className="h-10 w-full" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            </div>
+        );
+    }
     if (!release) return <div className="text-center p-20 text-red-500 font-black uppercase tracking-widest animate-fade-in">Session not found in distribution archive.</div>;
 
     return (
@@ -153,12 +256,19 @@ const ReleaseDetail: React.FC = () => {
                 </div>
 
                 <div className="lg:col-span-9 space-y-8">
+
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-sm uppercase tracking-widest font-black">Session Metadata Overview</CardTitle>
                         </CardHeader>
                         <CardContent className="pt-2">
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-y-10 gap-x-6">
+                                {isStaff && (
+                                    <>
+                                        <MetaItem label="Label ID" value={<span className="font-mono text-[10px]">{label?.id}</span>} />
+                                        <MetaItem label="Label Email" value={label?.ownerEmail} />
+                                    </>
+                                )}
                                 <MetaItem label="Label Branch" value={label?.name} />
                                 <MetaItem label="Universal Product Code" value={release.upc || 'Pending Allocation'} />
                                 <MetaItem label="Catalogue Number" value={release.catalogueNumber} />
@@ -239,7 +349,7 @@ const ReleaseDetail: React.FC = () => {
                                                     <MusicIcon className="w-4 h-4 text-primary" />
                                                     <span className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Master Reference Preview</span>
                                                 </div>
-                                                <audio controls src={track.audioUrl} className="h-10 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
+                                                <audio controls preload="none" src={track.audioUrl} className="h-10 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
                                             </div>
                                         </div>
                                     );
@@ -255,6 +365,41 @@ const ReleaseDetail: React.FC = () => {
                         <CardContent className="pt-2">
                             <div className="p-8 bg-black/40 rounded-[2rem] border border-gray-800/40 leading-relaxed text-gray-300 whitespace-pre-wrap font-medium text-lg">
                                 {release.description || 'No marketing description provided for this session.'}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="border-b border-gray-800/50 pb-4">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm uppercase tracking-widest font-black">Live Distribution Status</CardTitle>
+                                <span className="text-xs font-mono text-gray-500">11/11 PLATFORMS ACTIVE</span>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="flex flex-wrap gap-4">
+                                {[
+                                    { name: 'Spotify', icon: SpotifyIcon, color: 'text-[#1DB954]' },
+                                    { name: 'Apple Music', icon: AppleMusicIcon, color: 'text-[#FA243C]' },
+                                    { name: 'YouTube Music', icon: YouTubeMusicIcon, color: 'text-[#FF0000]' },
+                                    { name: 'Amazon Music', icon: AmazonMusicIcon, color: 'text-[#00A8E1]' },
+                                    { name: 'JioSaavn', icon: JioSaavnIcon, color: 'text-[#2BC5B4]' },
+                                    { name: 'Shazam', icon: ShazamIcon, color: 'text-[#0088FF]' },
+                                    { name: 'Tidal', icon: TidalIcon, color: 'text-black' },
+                                    { name: 'TikTok', icon: TikTokIcon, color: 'text-[#000000]' },
+                                    { name: 'Facebook', icon: FacebookIcon, color: 'text-[#1877F2]' },
+                                    { name: 'Instagram', icon: InstagramIcon, color: 'text-[#E4405F]' },
+                                    { name: 'SoundCloud', icon: SoundCloudIcon, color: 'text-[#FF5500]' },
+                                ].map((platform) => (
+                                    <div key={platform.name} className="group relative">
+                                        <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg hover:scale-110 transition-transform cursor-pointer">
+                                            <platform.icon className={`w-6 h-6 ${platform.color}`} />
+                                        </div>
+                                        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-black text-white text-[10px] font-bold uppercase px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
+                                            {platform.name}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </CardContent>
                     </Card>
