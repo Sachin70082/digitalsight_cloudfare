@@ -111,6 +111,7 @@ const Notices: React.FC = () => {
     };
 
     const myRank = getRank(currentUser?.designation);
+    const isStaff = currentUser?.role === UserRole.OWNER || currentUser?.role === UserRole.EMPLOYEE;
 
     if (isLoading && notices.length === 0) return <PageLoader />;
 
@@ -121,13 +122,15 @@ const Notices: React.FC = () => {
                     <h1 className="text-4xl font-extrabold text-white tracking-tight">Corporate Notice Board</h1>
                     <p className="text-gray-400 mt-2 text-lg">Official platform directives and communications.</p>
                 </div>
-                <Button onClick={handleOpenCreate} className="px-8 py-3 shadow-xl shadow-primary/20">Post New Notice</Button>
+                {isStaff && (
+                    <Button onClick={handleOpenCreate} className="px-8 py-3 shadow-xl shadow-primary/20">Post New Notice</Button>
+                )}
             </div>
 
             <div className="space-y-6">
                 {notices.map(notice => {
                     const isAuthor = notice.authorId === currentUser?.id;
-                    const canEdit = isAuthor || currentUser?.role === UserRole.OWNER;
+                    const canEdit = isAuthor || isStaff;
                     
                     return (
                         <div

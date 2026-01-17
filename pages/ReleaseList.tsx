@@ -5,7 +5,7 @@ import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { exportReleasesToExcel } from '../services/excelService';
 import { Release, ReleaseStatus, UserRole, Artist, Label } from '../types';
-import { Badge, Button, Input, Modal, Card, PageLoader, Pagination, Spinner, Table, THead, TBody, TR, TH, TD } from '../components/ui';
+import { Badge, Button, Input, Modal, Card, PageLoader, Pagination, Spinner, Table, THead, TBody, TR, TH, TD, Skeleton } from '../components/ui';
 import ReleaseForm from '../components/ReleaseForm';
 import { ArrowDownIcon, DownloadIcon, ArrowUpIcon, XCircleIcon, TrashIcon } from '../components/Icons';
 
@@ -44,6 +44,12 @@ const ReleaseList: React.FC = () => {
         try {
             const releasePromise = isPlatformSide ? api.getAllReleases() : api.getReleasesByLabel(user.labelId!);
             
+            const fetchedReleases = await releasePromise;
+            setReleases(fetchedReleases);
+            // Show releases immediately
+            setIsLoading(false);
+
+            // Fetch artists and labels in background
             let artistsPromise;
             if (isPlatformSide) {
                 artistsPromise = api.getAllArtists();
@@ -51,13 +57,11 @@ const ReleaseList: React.FC = () => {
                 artistsPromise = api.getArtistsByLabel(user.labelId!);
             }
 
-            const [fetchedReleases, allArtists, allLabels] = await Promise.all([
-                releasePromise,
+            const [allArtists, allLabels] = await Promise.all([
                 artistsPromise,
                 isPlatformSide ? api.getLabels() : Promise.resolve([])
             ]);
             
-            setReleases(fetchedReleases);
             const artistMap = new Map<string, Artist>();
             allArtists.forEach(a => artistMap.set(a.id, a));
             setArtists(artistMap);
@@ -66,7 +70,6 @@ const ReleaseList: React.FC = () => {
             setLabels(labelMap);
         } catch (e) {
             console.error("Load failed", e);
-        } finally {
             setIsLoading(false);
         }
     };
@@ -149,8 +152,6 @@ const ReleaseList: React.FC = () => {
         return filteredReleases.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredReleases, currentPage]);
 
-    if (isLoading) return <PageLoader />;
-
     return (
         <div className="animate-fade-in">
             <Card className="p-0 overflow-hidden">
@@ -207,91 +208,118 @@ const ReleaseList: React.FC = () => {
                         </TR>
                     </THead>
                     <TBody>
-                        {paginatedReleases.map(release => {
-                            const primaryIds = release.primaryArtistIds || [];
-                            const artistName = primaryIds.length > 0 ? (artists.get(primaryIds[0])?.name || 'Untitled') : 'Untitled';
-                            const isExpanded = expandedReleaseId === release.id;
-                            const isDraft = release.status === ReleaseStatus.DRAFT;
-                            const needsCorrection = release.status === ReleaseStatus.NEEDS_INFO;
-                            return (
-                                <React.Fragment key={release.id}>
-                                    <TR className={isExpanded ? 'bg-white/[0.03]' : ''}>
-                                        <TD className="text-center">
-                                            {!isDraft && (
-                                                <button onClick={() => setExpandedReleaseId(isExpanded ? null : release.id)} className="text-gray-600 hover:text-primary p-2 transition-all">
-                                                    {isExpanded ? <ArrowUpIcon className="w-4 h-4"/> : <ArrowDownIcon className="w-4 h-4"/>}
-                                                </button>
-                                            )}
-                                        </TD>
-                                        <TD>
-                                            <div className="flex items-center gap-5">
-                                                <div className="relative w-14 h-14 flex-shrink-0 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-white/5">
-                                                    <img
-                                                        src={release.artworkUrl || 'https://via.placeholder.com/60'}
-                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                        alt=""
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                    />
-                                                    {(isDraft || needsCorrection) && (
-                                                        <div className={`absolute -top-1.5 -left-1.5 w-4 h-4 ${needsCorrection ? 'bg-blue-500' : 'bg-yellow-500'} rounded-full border-[3px] border-gray-900 shadow-xl`} />
+                        {isLoading ? (
+                            [...Array(10)].map((_, i) => (
+                                <TR key={i}>
+                                    <TD className="text-center"><Skeleton className="w-4 h-4 mx-auto" /></TD>
+                                    <TD>
+                                        <div className="flex items-center gap-5">
+                                            <Skeleton className="w-14 h-14 rounded-xl flex-shrink-0" />
+                                            <div className="flex-1 space-y-2 min-w-0">
+                                                <Skeleton className="h-4 w-32" />
+                                                <Skeleton className="h-3 w-24" />
+                                            </div>
+                                        </div>
+                                    </TD>
+                                    <TD>
+                                        <div className="space-y-1">
+                                            <Skeleton className="h-2 w-16" />
+                                            <Skeleton className="h-3 w-24" />
+                                        </div>
+                                    </TD>
+                                    <TD><Skeleton className="h-6 w-20 rounded-full" /></TD>
+                                    <TD className="text-right"><Skeleton className="h-8 w-24 ml-auto rounded-full" /></TD>
+                                </TR>
+                            ))
+                        ) : (
+                            <>
+                                {paginatedReleases.map(release => {
+                                    const primaryIds = release.primaryArtistIds || [];
+                                    const artistName = primaryIds.length > 0 ? (artists.get(primaryIds[0])?.name || 'Untitled') : 'Untitled';
+                                    const isExpanded = expandedReleaseId === release.id;
+                                    const isDraft = release.status === ReleaseStatus.DRAFT;
+                                    const needsCorrection = release.status === ReleaseStatus.NEEDS_INFO;
+                                    return (
+                                        <React.Fragment key={release.id}>
+                                            <TR className={isExpanded ? 'bg-white/[0.03]' : ''}>
+                                                <TD className="text-center">
+                                                    {!isDraft && (
+                                                        <button onClick={() => setExpandedReleaseId(isExpanded ? null : release.id)} className="text-gray-600 hover:text-primary p-2 transition-all">
+                                                            {isExpanded ? <ArrowUpIcon className="w-4 h-4"/> : <ArrowDownIcon className="w-4 h-4"/>}
+                                                        </button>
                                                     )}
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <p className="text-[13px] font-black text-white truncate group-hover:text-primary transition-colors tracking-tight uppercase flex items-center">
-                                                        {release.title || 'Untitled Session'}
-                                                        {release.youtubeContentId && (
-                                                            <span className="text-[8px] bg-red-600/20 text-red-500 border border-red-600/30 px-1.5 py-0.5 rounded font-black ml-2 align-middle tracking-widest uppercase">CID</span>
+                                                </TD>
+                                                <TD>
+                                                    <div className="flex items-center gap-5">
+                                                        <div className="relative w-14 h-14 flex-shrink-0 bg-gray-900 rounded-xl overflow-hidden shadow-2xl border border-white/5">
+                                                            <img
+                                                                src={release.artworkUrl || 'https://via.placeholder.com/60'}
+                                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                                alt=""
+                                                                loading="lazy"
+                                                                decoding="async"
+                                                            />
+                                                            {(isDraft || needsCorrection) && (
+                                                                <div className={`absolute -top-1.5 -left-1.5 w-4 h-4 ${needsCorrection ? 'bg-blue-500' : 'bg-yellow-500'} rounded-full border-[3px] border-gray-900 shadow-xl`} />
+                                                            )}
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-[13px] font-black text-white truncate group-hover:text-primary transition-colors tracking-tight uppercase flex items-center">
+                                                                {release.title || 'Untitled Session'}
+                                                                {release.youtubeContentId && (
+                                                                    <span className="text-[8px] bg-red-600/20 text-red-500 border border-red-600/30 px-1.5 py-0.5 rounded font-black ml-2 align-middle tracking-widest uppercase">CID</span>
+                                                                )}
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500 font-bold tracking-widest mt-1 truncate uppercase">
+                                                                {artistName}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </TD>
+                                                <TD>
+                                                    <div className="bg-black/40 px-3 py-1.5 rounded-lg border border-white/5 inline-flex flex-col gap-0.5">
+                                                        <span className="text-[8px] text-gray-600 font-black uppercase">Distro Code</span>
+                                                        <span className="text-white tracking-widest font-mono">{release.upc || 'UNASSIGNED'}</span>
+                                                    </div>
+                                                </TD>
+                                                <TD><Badge status={release.status} /></TD>
+                                                <TD className="text-right">
+                                                    <div className="flex justify-end gap-3 items-center">
+                                                        {(canDelete || ((isDraft || needsCorrection) && !isPlatformSide)) && (
+                                                            <button
+                                                                onClick={() => triggerDeleteConfirmation(release.id, release.title)}
+                                                                className="p-2 text-gray-600 hover:text-red-500 transition-colors"
+                                                                title="Hard Purge Authority"
+                                                            >
+                                                                <TrashIcon className="w-5 h-5" />
+                                                            </button>
                                                         )}
-                                                    </p>
-                                                    <p className="text-[10px] text-gray-500 font-bold tracking-widest mt-1 truncate uppercase">
-                                                        {artistName}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </TD>
-                                        <TD>
-                                            <div className="bg-black/40 px-3 py-1.5 rounded-lg border border-white/5 inline-flex flex-col gap-0.5">
-                                                <span className="text-[8px] text-gray-600 font-black uppercase">Distro Code</span>
-                                                <span className="text-white tracking-widest font-mono">{release.upc || 'UNASSIGNED'}</span>
-                                            </div>
-                                        </TD>
-                                        <TD><Badge status={release.status} /></TD>
-                                        <TD className="text-right">
-                                            <div className="flex justify-end gap-3 items-center">
-                                                {canDelete && (
-                                                    <button
-                                                        onClick={() => triggerDeleteConfirmation(release.id, release.title)}
-                                                        className="p-2 text-gray-600 hover:text-red-500 transition-colors"
-                                                        title="Hard Purge Authority"
-                                                    >
-                                                        <TrashIcon className="w-5 h-5" />
-                                                    </button>
-                                                )}
-                                                {isDraft && !isPlatformSide ? (
-                                                    <Button onClick={() => { setResumeId(release.id); setCreateModalOpen(true); }} className="text-[9px] py-2 px-5 font-black uppercase tracking-widest shadow-lg shadow-primary/20">Resume Engine</Button>
-                                                ) : needsCorrection && !isPlatformSide ? (
-                                                    <Button
-                                                        onClick={() => { setResumeId(release.id); setCreateModalOpen(true); }}
-                                                        className="text-[9px] py-2 px-5 font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/20 border-none"
-                                                    >
-                                                        Fix Meta
-                                                    </Button>
-                                                ) : (
-                                                    <Link to={isPlatformSide ? `/release/${release.id}` : `/releases/${release.id}`} className="text-primary font-black text-[9px] uppercase tracking-[0.2em] transition-all bg-primary/5 px-6 py-2 rounded-full border border-primary/20 hover:bg-primary/20 hover:text-white">
-                                                        {isPlatformSide ? 'Audit Queue' : 'Meta Explorer'}
-                                                    </Link>
-                                                )}
-                                            </div>
-                                        </TD>
+                                                        {isDraft && !isPlatformSide ? (
+                                                            <Button onClick={() => { setResumeId(release.id); setCreateModalOpen(true); }} className="text-[9px] py-2 px-5 font-black uppercase tracking-widest shadow-lg shadow-primary/20">Resume Engine</Button>
+                                                        ) : needsCorrection && !isPlatformSide ? (
+                                                            <Button
+                                                                onClick={() => { setResumeId(release.id); setCreateModalOpen(true); }}
+                                                                className="text-[9px] py-2 px-5 font-black uppercase tracking-widest bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/20 border-none"
+                                                            >
+                                                                Fix Meta
+                                                            </Button>
+                                                        ) : (
+                                                            <Link to={isPlatformSide ? `/release/${release.id}` : `/releases/${release.id}`} className="text-primary font-black text-[9px] uppercase tracking-[0.2em] transition-all bg-primary/5 px-6 py-2 rounded-full border border-primary/20 hover:bg-primary/20 hover:text-white">
+                                                                {isPlatformSide ? 'Audit Queue' : 'Meta Explorer'}
+                                                            </Link>
+                                                        )}
+                                                    </div>
+                                                </TD>
+                                            </TR>
+                                        </React.Fragment>
+                                    );
+                                })}
+                                {filteredReleases.length === 0 && (
+                                    <TR>
+                                        <TD colSpan={5} className="py-32 text-center text-gray-600 font-bold uppercase tracking-widest text-xs opacity-50">No catalog items identified in the current filter.</TD>
                                     </TR>
-                                </React.Fragment>
-                            );
-                        })}
-                        {filteredReleases.length === 0 && (
-                            <TR>
-                                <TD colSpan={5} className="py-32 text-center text-gray-600 font-bold uppercase tracking-widest text-xs opacity-50">No catalog items identified in the current filter.</TD>
-                            </TR>
+                                )}
+                            </>
                         )}
                     </TBody>
                 </Table>

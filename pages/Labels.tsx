@@ -149,7 +149,7 @@ const Labels: React.FC = () => {
                     phone: formData.phone,
                     revenueShare: formData.revenueShare,
                     maxArtists: formData.maxArtists
-                }, currentUser);
+                });
                 
                 // Update permissions for label admin
                 const admin = await api.getLabelAdmin(editingLabelId);
@@ -169,9 +169,10 @@ const Labels: React.FC = () => {
                 const result = await api.createLabel({
                     ...formData,
                     permissions
-                });
-                setCreatedResult(result);
-                setLabels(prev => [...prev, result.label]);
+                } as any);
+                const castedResult = result as any;
+                setCreatedResult(castedResult);
+                setLabels(prev => [...prev, castedResult.label]);
                 showToast('Branch established within network.', 'success');
             }
         } catch (err: any) {

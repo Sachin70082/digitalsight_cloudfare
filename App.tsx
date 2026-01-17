@@ -1,11 +1,8 @@
 
 import React, { useState, createContext, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { GoogleReCaptchaProvider } from 'react-google-recaptcha-v3';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
-// @fix: Use import type for User as it's not exported as a value in the current firebase/auth build
-import type { User as FirebaseUser } from 'firebase/auth';
 
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -28,18 +25,14 @@ type ToastType = 'success' | 'error' | 'info';
 
 type AppContextType = {
   user: User | null;
-  pendingFounder: FirebaseUser | null;
-  login: (email: string, password?: string, recaptchaToken?: string) => Promise<void>;
-  completeFounderSetup: (name: string, designation: string) => Promise<void>;
+  login: (email: string, password?: string, turnstileToken?: string) => Promise<void>;
   logout: () => void;
   showToast: (message: string, type?: ToastType) => void;
 };
 
 export const AppContext = createContext<AppContextType>({
   user: null,
-  pendingFounder: null,
   login: async () => {},
-  completeFounderSetup: async () => {},
   logout: () => {},
   showToast: () => {},
 });
@@ -71,60 +64,29 @@ const Toast: React.FC<{ message: string; type: ToastType; onClear: () => void }>
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
-  const [pendingFounder, setPendingFounder] = useState<FirebaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   useEffect(() => {
-    const storedUser = sessionStorage.getItem('user');
-    if (storedUser) {
-      const parsedUser = JSON.parse(storedUser);
-      // Ensure permissions exist even when hydrating from storage
-      if (parsedUser && !parsedUser.permissions) {
-          parsedUser.permissions = {
-              canManageArtists: false,
-              canManageReleases: false,
-              canCreateSubLabels: false,
-              canSubmitAlbums: true
-          };
+    const initAuth = async () => {
+      const user = await api.verifyAuth();
+      if (user) {
+        setUser(user);
       }
-      setUser(parsedUser);
-    }
-    setIsLoading(false);
+      setIsLoading(false);
+    };
+    initAuth();
   }, []);
 
-  const login = useCallback(async (email: string, password?: string, recaptchaToken?: string) => {
-    const result = await api.login(email, password, recaptchaToken);
-    
-    if (result && 'needsProfile' in result) {
-        setPendingFounder(result.firebaseUser);
-        return;
-    }
-
-    if (result && 'id' in result) {
-      const userResult = result as User;
-      setUser(userResult);
-      sessionStorage.setItem('user', JSON.stringify(userResult));
-      setPendingFounder(null);
-    } else {
-      throw new Error('Authentication failed.');
-    }
+  const login = useCallback(async (email: string, password?: string, turnstileToken?: string) => {
+    if (!password || !turnstileToken) throw new Error('Credentials and security token required');
+    const user = await api.login(email, password, turnstileToken);
+    setUser(user);
   }, []);
-
-  const completeFounderSetup = useCallback(async (name: string, designation: string) => {
-      if (!pendingFounder) return;
-      
-      const newUser = await api.createMasterProfile(pendingFounder.uid, { name, designation });
-      setUser(newUser);
-      sessionStorage.setItem('user', JSON.stringify(newUser));
-      setPendingFounder(null);
-  }, [pendingFounder]);
 
   const logout = useCallback(async () => {
-    await api.logout();
+    api.clearToken();
     setUser(null);
-    setPendingFounder(null);
-    sessionStorage.removeItem('user');
   }, []);
 
   const showToast = useCallback((message: string, type: ToastType = 'info') => {
@@ -136,8 +98,7 @@ const App: React.FC = () => {
   }
 
   return (
-    <AppContext.Provider value={{ user, pendingFounder, login, completeFounderSetup, logout, showToast }}>
-      <GoogleReCaptchaProvider reCaptchaKey="6LeLuDMsAAAAAFbt7or2TUzG2I6TIBKAeuQKOxyT">
+    <AppContext.Provider value={{ user, login, logout, showToast }}>
       <BrowserRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
         <Routes>
@@ -193,7 +154,6 @@ const App: React.FC = () => {
           )}
         </Routes>
       </BrowserRouter>
-      </GoogleReCaptchaProvider>
     </AppContext.Provider>
   );
 };

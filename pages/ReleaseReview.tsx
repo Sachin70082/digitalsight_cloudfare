@@ -15,34 +15,40 @@ const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label,
     </div>
 );
 
-const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => (
-    <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
-        {(!notes || notes.length === 0) ? (
-            <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest py-4 text-center">No audit history recorded.</p>
-        ) : notes.map((note) => (
-            <div key={note.id} className={`p-4 rounded-xl border ${
-                note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE
-                    ? 'bg-yellow-900/10 border-yellow-500/20' 
-                    : 'bg-primary/5 border-primary/20'
-            }`}>
-                <div className="flex justify-between items-start mb-2">
-                    <div className="flex items-center gap-2">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
-                            note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE ? 'bg-yellow-500 text-yellow-900' : 'bg-primary text-white'
-                        }`}>
-                            {note.authorRole}
+const InteractionLog: React.FC<{ notes: InteractionNote[] }> = ({ notes }) => {
+    const sortedNotes = [...(notes || [])].sort((a, b) => 
+        (b.timestamp || '').localeCompare(a.timestamp || '')
+    );
+
+    return (
+        <div className="space-y-4 max-h-96 overflow-y-auto pr-2 custom-scrollbar">
+            {(!sortedNotes || sortedNotes.length === 0) ? (
+                <p className="text-gray-500 font-bold uppercase text-[10px] tracking-widest py-4 text-center">No audit history recorded.</p>
+            ) : sortedNotes.map((note) => (
+                <div key={note.id} className={`p-4 rounded-xl border ${
+                    note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE
+                        ? 'bg-yellow-900/10 border-yellow-500/20' 
+                        : 'bg-primary/5 border-primary/20'
+                }`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                                note.authorRole === UserRole.OWNER || note.authorRole === UserRole.EMPLOYEE ? 'bg-yellow-500 text-yellow-900' : 'bg-primary text-white'
+                            }`}>
+                                {note.authorRole}
+                            </span>
+                            <span className="text-xs text-white font-bold">{note.authorName}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 font-mono">
+                            {new Date(note.timestamp).toLocaleString()}
                         </span>
-                        <span className="text-xs text-white font-bold">{note.authorName}</span>
                     </div>
-                    <span className="text-[10px] text-gray-500 font-mono">
-                        {new Date(note.timestamp).toLocaleString()}
-                    </span>
+                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{note.message}</p>
                 </div>
-                <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">{note.message}</p>
-            </div>
-        ))}
-    </div>
-);
+            ))}
+        </div>
+    );
+};
 
 const PackageCircularProgress: React.FC<{ percentage: number, status: string }> = ({ percentage, status }) => {
     const radius = 85;
@@ -419,7 +425,7 @@ const ReleaseReview: React.FC = () => {
                                                 </div>
                                             </div>
                                             <div className="bg-black/60 p-4 rounded-2xl border border-white/5 flex-grow md:max-w-md">
-                                                <audio controls src={track.audioUrl} className="h-8 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
+                                                <audio controls preload="none" src={track.audioUrl} className="h-8 w-full opacity-60 hover:opacity-100 transition-opacity"></audio>
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-8 py-8 border-t border-white/5">

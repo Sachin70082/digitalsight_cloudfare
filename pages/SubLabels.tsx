@@ -20,6 +20,7 @@ const SubLabels: React.FC = () => {
     const [newEmail, setNewEmail] = useState('');
     const [newLabelInfo, setNewLabelInfo] = useState<{label: Label, user: User} | null>(null);
     const [maxArtists, setMaxArtists] = useState(10);
+    const [revenueShare, setRevenueShare] = useState(70);
     const [permissions, setPermissions] = useState<UserPermissions>({
         canManageArtists: true,
         canManageReleases: true,
@@ -110,6 +111,7 @@ const SubLabels: React.FC = () => {
         setNewName(label.name);
         setAdminName(''); // Will be set from admin profile
         setMaxArtists(label.maxArtists || 10);
+        setRevenueShare(label.revenueShare || 70);
         setNewLabelInfo(null);
         
         const admin = await api.getLabelAdmin(label.id);
@@ -138,7 +140,7 @@ const SubLabels: React.FC = () => {
         setIsLoading(true);
         try {
             if (editingLabelId) {
-                await api.updateLabel(editingLabelId, { name: newName, maxArtists }, user as User);
+                await api.updateLabel(editingLabelId, { name: newName, maxArtists, revenueShare });
                 const admin = await api.getLabelAdmin(editingLabelId);
                 if (admin) {
                     await api.updateUserPermissions(admin.id, permissions, user as User);
@@ -146,7 +148,7 @@ const SubLabels: React.FC = () => {
                         await api.updateUser(admin.id, { name: adminName });
                     }
                 }
-                setSubLabels(prev => prev.map(l => l.id === editingLabelId ? { ...l, name: newName } : l));
+                setSubLabels(prev => prev.map(l => l.id === editingLabelId ? { ...l, name: newName, maxArtists, revenueShare } : l));
                 setIsModalOpen(false);
             } else {
                 const result = await api.createLabel({
@@ -155,10 +157,11 @@ const SubLabels: React.FC = () => {
                     adminEmail: newEmail,
                     permissions,
                     maxArtists,
+                    revenueShare,
                     parentLabelId: user.labelId
-                });
-                setNewLabelInfo(result);
-                setSubLabels(prev => [...prev, result.label]);
+                } as any);
+                setNewLabelInfo(result as any);
+                setSubLabels(prev => [...prev, (result as any).label]);
             }
         } catch (error) {
             showToast('Protocol error during synchronization.', 'error');
@@ -304,6 +307,10 @@ const SubLabels: React.FC = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Input label="Admin Auth Endpoint" type="email" value={newEmail} onChange={e => setNewEmail(e.target.value)} required disabled={!!editingLabelId} className="h-14 bg-black/40" />
+                                <div className="space-y-2">
+                                    <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">Revenue Net Share (%)</label>
+                                    <input type="number" value={revenueShare} onChange={e => setRevenueShare(parseInt(e.target.value))} className="w-full bg-black/40 border border-gray-600 rounded-xl px-4 py-4 text-sm font-black text-white h-14" />
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 <label className="block text-[11px] font-black text-gray-500 uppercase tracking-widest">Artist Limit</label>

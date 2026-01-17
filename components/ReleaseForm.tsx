@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
-import { Release, Track, ReleaseType, Artist, ReleaseStatus, Label } from '../types';
+import { Release, Track, ReleaseType, Artist, ReleaseStatus, Label, UserRole } from '../types';
 import { Button, Input, Textarea, Spinner } from './ui';
 import { SparklesIcon, UploadIcon, XCircleIcon, MusicIcon, CheckCircleIcon } from './Icons';
 import { api } from '../services/mockApi';
@@ -271,6 +271,15 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             const newNotes = [...(formData.notes || [])];
             if (submissionNote.trim()) {
                 newNotes.unshift({ id: `note-${Date.now()}`, authorName: user.name, authorRole: user.role, message: submissionNote, timestamp: new Date().toISOString() });
+            } else if (isSubmission && formData.status === ReleaseStatus.NEEDS_INFO) {
+                // Automatically add a note if resubmitting from a correction request without a custom note
+                newNotes.unshift({ 
+                    id: `note-${Date.now()}`, 
+                    authorName: user.name, 
+                    authorRole: user.role, 
+                    message: "Resubmitted for review after corrections.", 
+                    timestamp: new Date().toISOString() 
+                });
             }
             const finalData = { 
                 ...formData, 
@@ -280,7 +289,9 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 notes: newNotes,
                 artworkFileName: sanitizeFilename(formData.title) + '_cover'
             };
-            const result = await api.addRelease(finalData);
+            const result = initialReleaseId 
+                ? await api.updateRelease(initialReleaseId, finalData)
+                : await api.addRelease(finalData);
             onSave(result);
             onClose();
         } catch (error: any) {
@@ -294,6 +305,12 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     const canSubmit = user?.permissions?.canSubmitAlbums || user?.role === 'Owner' || user?.role === 'Employee';
     const showLabelSelector = hierarchyLabels.length > 1;
     
+    const latestAdminNote = formData.notes
+        ? [...formData.notes]
+            .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+            .find(n => n.authorRole === UserRole.OWNER || n.authorRole === UserRole.EMPLOYEE)
+        : null;
+
     return (
         <div className="space-y-8 relative">
             {isSubmitting && (
@@ -330,6 +347,21 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                     </React.Fragment>
                 ))}
             </div>
+
+            {formData.status === ReleaseStatus.NEEDS_INFO && latestAdminNote && (
+                <div className="bg-blue-900/20 border border-blue-500/30 p-6 rounded-2xl animate-fade-in">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
+                        <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-[0.2em]">Correction Directive</h4>
+                    </div>
+                    <p className="text-sm text-white font-medium leading-relaxed italic">
+                        "{latestAdminNote.message}"
+                    </p>
+                    <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest mt-3">
+                        Issued by {latestAdminNote.authorName} ({latestAdminNote.authorRole}) • {new Date(latestAdminNote.timestamp).toLocaleString()}
+                    </p>
+                </div>
+            )}
             
             <div className="space-y-8 pb-6">
                 {step === 1 && (
