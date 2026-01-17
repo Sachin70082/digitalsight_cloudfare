@@ -176,9 +176,10 @@ async function handleResetPassword(request: Request, env: Env, corsHeaders: any)
             .bind(email)
             .first() as any;
 
-        // Security: Return success even if email doesn't exist
+        // Check if user exists
         if (!user) {
-            return new Response(JSON.stringify({ success: true }), { 
+            return new Response(JSON.stringify({ error: 'User email not registered yet.' }), { 
+                status: 404,
                 headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             });
         }
