@@ -1,25 +1,27 @@
 
-import React, { useState, createContext, useEffect, useCallback } from 'react';
+import React, { useState, createContext, useEffect, useCallback, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { api } from './services/mockApi';
 
 import Layout from './components/Layout';
 import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import ReleaseList from './pages/ReleaseList';
-import ReleaseReview from './pages/ReleaseReview';
-import ReleaseDetail from './pages/ReleaseDetail';
-import Artists from './pages/Artists';
-import SubLabels from './pages/SubLabels';
-import Settings from './pages/Settings';
-import Network from './pages/Network';
-import Employees from './pages/Employees';
-import Notices from './pages/Notices';
-import CorrectionQueue from './pages/CorrectionQueue';
-import Support from './pages/Support';
-import FAQ from './pages/FAQ';
-import Labels from './pages/Labels';
+
+// Lazy load non-critical pages
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ReleaseList = lazy(() => import('./pages/ReleaseList'));
+const ReleaseReview = lazy(() => import('./pages/ReleaseReview'));
+const ReleaseDetail = lazy(() => import('./pages/ReleaseDetail'));
+const Artists = lazy(() => import('./pages/Artists'));
+const SubLabels = lazy(() => import('./pages/SubLabels'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Network = lazy(() => import('./pages/Network'));
+const Employees = lazy(() => import('./pages/Employees'));
+const Notices = lazy(() => import('./pages/Notices'));
+const CorrectionQueue = lazy(() => import('./pages/CorrectionQueue'));
+const Support = lazy(() => import('./pages/Support'));
+const FAQ = lazy(() => import('./pages/FAQ'));
+const Labels = lazy(() => import('./pages/Labels'));
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -101,58 +103,60 @@ const App: React.FC = () => {
     <AppContext.Provider value={{ user, login, logout, showToast }}>
       <BrowserRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
-        <Routes>
-          {!user ? (
-            <>
-                <Route path="/login" element={<Login />} />
-                <Route path="*" element={<Navigate to="/login" />} />
-            </>
-          ) : (
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Dashboard />} />
-              <Route path="releases" element={<ReleaseList />} />
-              <Route path="releases/:releaseId" element={<ReleaseDetail />} />
-              
-              {(user.role === UserRole.LABEL_ADMIN || user.permissions?.canCreateSubLabels) && (
-                <Route path="sub-labels" element={<SubLabels />} />
-              )}
+        <Suspense fallback={<div className="bg-gray-900 h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>}>
+          <Routes>
+            {!user ? (
+              <>
+                  <Route path="/login" element={<Login />} />
+                  <Route path="*" element={<Navigate to="/login" />} />
+              </>
+            ) : (
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Dashboard />} />
+                <Route path="releases" element={<ReleaseList />} />
+                <Route path="releases/:releaseId" element={<ReleaseDetail />} />
+                
+                {(user.role === UserRole.LABEL_ADMIN || user.permissions?.canCreateSubLabels) && (
+                  <Route path="sub-labels" element={<SubLabels />} />
+                )}
 
-              {(user.role === UserRole.OWNER || user.permissions?.canManageNetwork || user.permissions?.canCreateSubLabels) && (
-                <Route path="network" element={<Network />} />
-              )}
+                {(user.role === UserRole.OWNER || user.permissions?.canManageNetwork || user.permissions?.canCreateSubLabels) && (
+                  <Route path="network" element={<Network />} />
+                )}
 
-              {(user.role !== UserRole.ARTIST || user.permissions?.canManageArtists) && (
-                <Route path="artists" element={<Artists />} />
-              )}
+                {(user.role !== UserRole.ARTIST || user.permissions?.canManageArtists) && (
+                  <Route path="artists" element={<Artists />} />
+                )}
 
-              {(user.role === UserRole.OWNER || user.permissions?.canManageEmployees) && (
-                <Route path="employees" element={<Employees />} />
-              )}
+                {(user.role === UserRole.OWNER || user.permissions?.canManageEmployees) && (
+                  <Route path="employees" element={<Employees />} />
+                )}
 
-              {(user.role === UserRole.OWNER || user.role === UserRole.EMPLOYEE) && (
-                  <>
-                    <Route path="notices" element={<Notices />} />
-                    <Route path="correction-queue" element={<CorrectionQueue />} />
-                  </>
-              )}
+                {(user.role === UserRole.OWNER || user.role === UserRole.EMPLOYEE) && (
+                    <>
+                      <Route path="notices" element={<Notices />} />
+                      <Route path="correction-queue" element={<CorrectionQueue />} />
+                    </>
+                )}
 
-              <Route path="support" element={<Support />} />
-              <Route path="faq" element={<FAQ />} />
+                <Route path="support" element={<Support />} />
+                <Route path="faq" element={<FAQ />} />
 
-              <Route path="settings" element={<Settings />} />
+                <Route path="settings" element={<Settings />} />
 
-              {(user.role === UserRole.OWNER || user.role === UserRole.EMPLOYEE) && (
-                <Route path="release/:releaseId" element={<ReleaseReview />} />
-              )}
+                {(user.role === UserRole.OWNER || user.role === UserRole.EMPLOYEE) && (
+                  <Route path="release/:releaseId" element={<ReleaseReview />} />
+                )}
 
-              {(user.role === UserRole.OWNER || user.permissions?.canOnboardLabels) && (
-                <Route path="labels" element={<Labels />} />
-              )}
-              
-              <Route path="*" element={<Navigate to="/" />} />
-            </Route>
-          )}
-        </Routes>
+                {(user.role === UserRole.OWNER || user.permissions?.canOnboardLabels) && (
+                  <Route path="labels" element={<Labels />} />
+                )}
+                
+                <Route path="*" element={<Navigate to="/" />} />
+              </Route>
+            )}
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </AppContext.Provider>
   );

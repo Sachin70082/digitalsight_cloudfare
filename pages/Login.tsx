@@ -135,7 +135,6 @@ const Login: React.FC = () => {
       {/* Dynamic Branding Pane - Left */}
       <div className="hidden lg:flex lg:w-[55%] relative flex-col justify-between p-12 xl:p-20 bg-black overflow-hidden border-r border-white/5">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(29,185,84,0.08)_0%,_transparent_50%)] pointer-events-none"></div>
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 pointer-events-none"></div>
         
         <div className="relative z-10">
             <div className="flex items-center gap-4 mb-12 xl:mb-16">
@@ -171,7 +170,7 @@ const Login: React.FC = () => {
       <div className="w-full lg:w-[45%] flex items-center justify-center p-4 sm:p-8 bg-gray-900 relative overflow-y-auto lg:overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.03)_0%,_transparent_70%)] pointer-events-none"></div>
         
-        <div className="w-full max-w-lg relative z-10 animate-slide-up flex flex-col h-full lg:h-auto justify-center">
+        <div className="w-full max-w-lg relative z-10 flex flex-col h-full lg:h-auto justify-center">
           {/* Mobile Logo/Brand */}
           <div className="flex lg:hidden items-center justify-center gap-3 mb-6">
               <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-black font-black text-xl shadow-lg shadow-primary/20">D</div>
@@ -198,7 +197,7 @@ const Login: React.FC = () => {
                               type="email"
                               value={email}
                               onChange={(e) => setEmail(e.target.value)}
-                              placeholder="admin@digitalsight.pro"
+                              placeholder="admin_email@gmail.com"
                               required
                               className="h-12 sm:h-14 xl:h-16 pl-14 bg-black/40 border-gray-800 focus:border-primary text-sm sm:text-base placeholder:text-gray-700 transition-all rounded-xl sm:rounded-2xl"
                             />
@@ -247,9 +246,13 @@ const Login: React.FC = () => {
                     )}
 
                     <div className="space-y-4">
-                        <Button type="submit" className="w-full h-12 sm:h-14 xl:h-16 flex justify-center py-4 text-[10px] xl:text-xs font-black uppercase tracking-[0.25em] shadow-[0_20px_40px_-10px_rgba(29,185,84,0.3)] hover:shadow-[0_20px_40px_-5px_rgba(29,185,84,0.4)] rounded-xl sm:rounded-2xl transition-all" disabled={isLoading}>
-                          {isLoading ? <Spinner className="w-6 h-6" /> : 'Initialize Secure Session'}
-                        </Button>
+                        <button 
+                            type="submit" 
+                            className="w-full h-12 sm:h-14 xl:h-16 flex items-center justify-center py-4 text-sm sm:text-base font-bold bg-gradient-to-r from-[#1DB954] to-[#169c46] hover:from-[#169c46] hover:to-[#1DB954] text-white shadow-[0_20px_40px_-10px_rgba(29,185,84,0.3)] hover:shadow-[0_20px_40px_-5px_rgba(29,185,84,0.4)] rounded-xl sm:rounded-2xl transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed" 
+                            disabled={isLoading}
+                        >
+                          {isLoading ? <Spinner className="w-6 h-6" /> : 'Sign in to the portal'}
+                        </button>
                         
                         <div className="text-center">
                             <button 
@@ -297,9 +300,13 @@ const Login: React.FC = () => {
                                 </div>
                             )}
                             <div className="flex flex-col gap-3 xl:gap-4 pt-2 xl:pt-4">
-                                <Button type="submit" disabled={isLoading} className="h-12 sm:h-14 xl:h-16 text-[10px] xl:text-[11px] font-black uppercase tracking-[0.25em] rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20">
-                                    {isLoading ? <Spinner className="w-6 h-6" /> : 'Transmit Recovery Link'}
-                                </Button>
+                                <button 
+                                    type="submit" 
+                                    disabled={isLoading} 
+                                    className="h-12 sm:h-14 xl:h-16 flex items-center justify-center text-sm sm:text-base font-bold bg-gradient-to-r from-[#1DB954] to-[#169c46] hover:from-[#169c46] hover:to-[#1DB954] text-white rounded-xl sm:rounded-2xl shadow-xl shadow-primary/20 transition-all duration-300 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? <Spinner className="w-6 h-6" /> : 'Send Recovery Link'}
+                                </button>
                                 <button 
                                     type="button"
                                     className="h-10 sm:h-12 text-[10px] xl:text-[11px] font-black text-gray-500 uppercase tracking-widest hover:text-white transition-colors"
