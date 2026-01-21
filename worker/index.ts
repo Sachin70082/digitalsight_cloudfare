@@ -58,6 +58,7 @@ export default {
       if (path.startsWith('/notices')) return await handleNotices(request, env, corsHeaders, user);
       if (path.startsWith('/revenue')) return await handleRevenue(request, env, corsHeaders);
       if (path.startsWith('/search')) return await handleSearch(request, env, corsHeaders);
+      if (path.startsWith('/stats')) return await handleStats(request, env, corsHeaders);
       
       return new Response('Not Found', { status: 404, headers: corsHeaders });
 
@@ -979,6 +980,51 @@ async function handleSearch(request: Request, env: Env, corsHeaders: any) {
         artists,
         labels
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+}
+
+async function handleStats(request: Request, env: Env, corsHeaders: any) {
+    if (request.method === 'GET') {
+        const url = new URL(request.url);
+        const labelId = url.searchParams.get('labelId');
+
+        let artistsQuery = 'SELECT COUNT(*) as count FROM artists';
+        let labelsQuery = 'SELECT COUNT(*) as count FROM labels';
+        let releasesQuery = `
+            SELECT 
+                SUM(CASE WHEN status = 'Draft' THEN 1 ELSE 0 END) as drafted,
+                SUM(CASE WHEN status = 'Published' THEN 1 ELSE 0 END) as published,
+                SUM(CASE WHEN status = 'Rejected' THEN 1 ELSE 0 END) as rejected,
+                SUM(CASE WHEN status = 'Needs Info' THEN 1 ELSE 0 END) as correction,
+                SUM(CASE WHEN status = 'Takedown' THEN 1 ELSE 0 END) as takedown,
+                SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) as pending
+            FROM releases
+        `;
+
+        const params: any[] = [];
+
+        if (labelId) {
+            artistsQuery += ' WHERE label_id = ?';
+            labelsQuery += ' WHERE parent_label_id = ?';
+            releasesQuery += ' WHERE label_id = ?';
+            params.push(labelId);
+        }
+
+        const artists = await env.DB.prepare(artistsQuery).bind(...params).first() as any;
+        const labels = await env.DB.prepare(labelsQuery).bind(...params).first() as any;
+        const releaseStats = await env.DB.prepare(releasesQuery).bind(...params).first() as any;
+
+        return new Response(JSON.stringify({
+            artists: artists?.count || 0,
+            labels: labels?.count || 0,
+            drafted: releaseStats?.drafted || 0,
+            published: releaseStats?.published || 0,
+            rejected: releaseStats?.rejected || 0,
+            correction: releaseStats?.correction || 0,
+            takedown: releaseStats?.takedown || 0,
+            pending: releaseStats?.pending || 0
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+    return new Response(null, { status: 405, headers: corsHeaders });
 }
 
 // --- Helpers ---

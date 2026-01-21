@@ -179,6 +179,12 @@ class ApiService {
   // Revenue
   async getRevenueEntries(): Promise<RevenueEntry[]> { return this.request('/revenue'); }
 
+  // Stats
+  async getStats(labelId?: string): Promise<any> {
+      const query = labelId ? `?labelId=${labelId}` : '';
+      return this.request(`/stats${query}`);
+  }
+
   // Search
   async globalSearch(query: string, user: any) {
       return this.request(`/search?q=${encodeURIComponent(query)}`);

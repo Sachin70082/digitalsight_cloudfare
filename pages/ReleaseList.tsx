@@ -1,6 +1,6 @@
 
 import React, { useContext, useEffect, useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AppContext } from '../App';
 import { api } from '../services/mockApi';
 import { exportReleasesToExcel } from '../services/excelService';
@@ -33,6 +33,15 @@ const ReleaseList: React.FC = () => {
     const [isCreateModalOpen, setCreateModalOpen] = useState(false);
     const [resumeId, setResumeId] = useState<string | undefined>(undefined);
     const [expandedReleaseId, setExpandedReleaseId] = useState<string | null>(null);
+
+    const [searchParams] = useSearchParams();
+
+    useEffect(() => {
+        const status = searchParams.get('status');
+        if (status && Object.values(ReleaseStatus).includes(status as ReleaseStatus)) {
+            setStatusFilter(status as ReleaseStatus);
+        }
+    }, [searchParams]);
 
     const isPlatformSide = user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE;
     const isOwner = user?.role === UserRole.OWNER;
@@ -75,11 +84,12 @@ const ReleaseList: React.FC = () => {
     };
 
     useEffect(() => {
-        if (isPlatformSide) {
-            const today = new Date().toISOString().split('T')[0];
-            setStartDate(today);
-            setEndDate(today);
-        }
+        // Removed default date filtering to show all history by default
+        // if (isPlatformSide) {
+        //     const today = new Date().toISOString().split('T')[0];
+        //     setStartDate(today);
+        //     setEndDate(today);
+        // }
     }, [isPlatformSide]);
 
     useEffect(() => {
@@ -125,7 +135,8 @@ const ReleaseList: React.FC = () => {
 
     const filteredReleases = useMemo(() => {
         return releases.filter(release => {
-            if (isPlatformSide && (release.status === ReleaseStatus.NEEDS_INFO || release.status === ReleaseStatus.DRAFT)) return false;
+            // Removed hardcoded filter to allow viewing all statuses via dashboard cards
+            // if (isPlatformSide && (release.status === ReleaseStatus.NEEDS_INFO || release.status === ReleaseStatus.DRAFT)) return false;
 
             const primaryIds = release.primaryArtistIds || [];
             const artistName = primaryIds.length > 0 ? (artists.get(primaryIds[0])?.name || '') : '';

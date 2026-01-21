@@ -15,12 +15,19 @@ const NOTICE_STYLING: Record<NoticeType, string> = {
     [NoticeType.EVENT]: 'border-yellow-500/50 bg-yellow-900/10'
 };
 
-const TopStat = ({ title, value, color = "text-white", loading = false }: { title: string, value: string | number, color?: string, loading?: boolean }) => (
-    <div className="bg-white/[0.02] backdrop-blur-xl p-6 rounded-[2rem] border border-white/5 shadow-xl transition-all duration-300 hover:border-primary/20">
-        <p className="text-[10px] text-gray-500 uppercase font-black tracking-[0.2em] mb-2 ml-1">{title}</p>
-        {loading ? <Skeleton className="h-9 w-24 rounded-lg" /> : <p className={`text-3xl font-black ${color} tracking-tight`}>{value.toLocaleString()}</p>}
-    </div>
-);
+const TopStat = ({ title, value, color = "text-white", loading = false, link }: { title: string, value: string | number, color?: string, loading?: boolean, link?: string }) => {
+    const content = (
+        <div className="bg-white/[0.02] backdrop-blur-xl p-6 rounded-[2rem] border border-white/5 shadow-xl transition-all duration-300 hover:border-primary/20 h-full">
+            <p className="text-[10px] text-gray-500 uppercase font-black tracking-[0.2em] mb-2 ml-1">{title}</p>
+            {loading ? <Skeleton className="h-9 w-24 rounded-lg" /> : <p className={`text-3xl font-black ${color} tracking-tight`}>{value.toLocaleString()}</p>}
+        </div>
+    );
+    
+    if (link) {
+        return <Link to={link} className="block h-full hover:scale-[1.02] transition-transform">{content}</Link>;
+    }
+    return content;
+};
 
 const NoticesWidget = ({ notices, loading }: { notices: Notice[], loading: boolean }) => (
     <Card className="h-full">
@@ -64,26 +71,33 @@ const NoticesWidget = ({ notices, loading }: { notices: Notice[], loading: boole
 
 const AdminDashboard: React.FC = () => {
     const { user } = useContext(AppContext);
-    const [stats, setStats] = useState({ releases: 0, labels: 0, pending: 0, artists: 0 });
+    const [stats, setStats] = useState({ 
+        artists: 0, 
+        labels: 0, 
+        drafted: 0, 
+        published: 0, 
+        rejected: 0, 
+        correction: 0, 
+        takedown: 0,
+        pending: 0 
+    });
     const [notices, setNotices] = useState<Notice[]>([]);
     const [isLoading, setIsLoading] = useState(true);
    
     useEffect(() => {
         const fetchData = async () => {
-            const [allReleases, allLabels, allArtists, allNotices] = await Promise.all([
-                api.getAllReleases(), 
-                api.getLabels(),
-                api.getAllArtists(),
-                api.getNotices(user!)
-            ]);
-            setStats({
-                releases: allReleases.length,
-                labels: allLabels.length,
-                pending: allReleases.filter(r => r.status === 'Pending').length,
-                artists: allArtists.length
-            });
-            setNotices(allNotices.slice(0, 10));
-            setIsLoading(false);
+            try {
+                const [statsData, allNotices] = await Promise.all([
+                    api.getStats(),
+                    api.getNotices(user!)
+                ]);
+                setStats(statsData);
+                setNotices(allNotices.slice(0, 10));
+            } catch (e) {
+                console.error("Failed to load dashboard data", e);
+            } finally {
+                setIsLoading(false);
+            }
         };
         fetchData();
     }, [user]);
@@ -96,7 +110,7 @@ const AdminDashboard: React.FC = () => {
                     <p className="text-gray-500 font-medium mt-1">Global Distribution Network Oversight • <span className="text-primary font-bold">{user?.name}</span> ({user?.designation})</p>
                 </div>
                 <div className="flex gap-4">
-                    <Link to="/releases" className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-black font-black uppercase text-[10px] px-6 py-3 rounded-full transition-all tracking-widest shadow-xl shadow-primary/20">
+                    <Link to="/releases?status=Pending" className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-black font-black uppercase text-[10px] px-6 py-3 rounded-full transition-all tracking-widest shadow-xl shadow-primary/20">
                         Review Queue {stats.pending > 0 && <span className="bg-black text-primary px-1.5 rounded-full text-[8px]">{stats.pending}</span>}
                     </Link>
                     {user?.role === UserRole.OWNER && (
@@ -107,11 +121,14 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <TopStat title="Network Releases" value={stats.releases} loading={isLoading} />
-                <TopStat title="Managed Labels" value={stats.labels} color="text-blue-400" loading={isLoading} />
-                <TopStat title="Global Artists" value={stats.artists} color="text-green-400" loading={isLoading} />
-                <TopStat title="Pending Review" value={stats.pending} color={stats.pending > 0 ? "text-yellow-500" : "text-gray-500"} loading={isLoading} />
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                <TopStat title="Artists" value={stats.artists} link="/artists" loading={isLoading} />
+                <TopStat title="Labels" value={stats.labels} link="/labels" color="text-blue-400" loading={isLoading} />
+                <TopStat title="Drafted" value={stats.drafted} link="/releases?status=Draft" color="text-gray-400" loading={isLoading} />
+                <TopStat title="Published" value={stats.published} link="/releases?status=Published" color="text-green-500" loading={isLoading} />
+                <TopStat title="Rejected" value={stats.rejected} link="/releases?status=Rejected" color="text-red-500" loading={isLoading} />
+                <TopStat title="Correction" value={stats.correction} link="/correction-queue" color="text-yellow-500" loading={isLoading} />
+                <TopStat title="Taken Down" value={stats.takedown} link="/releases?status=Takedown" color="text-red-700" loading={isLoading} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -175,23 +192,50 @@ const PartnerDashboard: React.FC = () => {
     const { user } = useContext(AppContext);
     const [releases, setReleases] = useState<Release[]>([]);
     const [notices, setNotices] = useState<Notice[]>([]);
+    const [stats, setStats] = useState({ 
+        artists: 0, 
+        labels: 0, 
+        drafted: 0, 
+        published: 0, 
+        rejected: 0, 
+        correction: 0, 
+        takedown: 0,
+        pending: 0 
+    });
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
         const fetchData = async () => {
-            const [myReleases, allNotices] = await Promise.all([
-                api.getReleasesByLabel(user?.labelId || ''),
-                api.getNotices(user!)
-            ]);
-            setReleases(myReleases.slice(0, 5));
-            setNotices(allNotices.slice(0, 10));
-            setIsLoading(false);
+            try {
+                const [myReleases, allNotices, statsData] = await Promise.all([
+                    api.getReleasesByLabel(user?.labelId || ''),
+                    api.getNotices(user!),
+                    api.getStats(user?.labelId)
+                ]);
+                setReleases(myReleases.slice(0, 5));
+                setNotices(allNotices.slice(0, 10));
+                setStats(statsData);
+            } catch (e) {
+                console.error("Failed to load dashboard data", e);
+            } finally {
+                setIsLoading(false);
+            }
         };
         fetchData();
     }, [user]);
 
     return (
         <div className="space-y-6 animate-fade-in">
+             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                <TopStat title="Artists" value={stats.artists} link="/artists" loading={isLoading} />
+                <TopStat title="Drafted" value={stats.drafted} link="/releases?status=Draft" color="text-gray-400" loading={isLoading} />
+                <TopStat title="Published" value={stats.published} link="/releases?status=Published" color="text-green-500" loading={isLoading} />
+                <TopStat title="Rejected" value={stats.rejected} link="/releases?status=Rejected" color="text-red-500" loading={isLoading} />
+                <TopStat title="Correction" value={stats.correction} link="/releases?status=Needs Info" color="text-yellow-500" loading={isLoading} />
+                <TopStat title="Taken Down" value={stats.takedown} link="/releases?status=Takedown" color="text-red-700" loading={isLoading} />
+                <TopStat title="Pending" value={stats.pending} link="/releases?status=Pending" color="text-blue-500" loading={isLoading} />
+            </div>
+
              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-6">
                     <Card className="bg-gradient-to-br from-primary/10 to-transparent">

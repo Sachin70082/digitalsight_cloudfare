@@ -153,7 +153,7 @@ const Artists: React.FC = () => {
     const fetchArtists = async () => {
         setIsLoading(true);
         try {
-            if (user?.role === UserRole.OWNER) {
+            if (user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE) {
                 const data = await api.getAllArtists();
                 setArtists(Array.isArray(data) ? data : []);
             } else if (user?.labelId) {
@@ -236,6 +236,31 @@ const Artists: React.FC = () => {
         return filteredArtists.slice(startIndex, startIndex + itemsPerPage);
     }, [filteredArtists, currentPage]);
 
+    return (
+        <div className="animate-fade-in">
+            <Card className="p-0 overflow-hidden">
+                <div className="p-8 flex flex-col gap-4 border-b border-white/5">
+                    <div className="flex justify-between items-center">
+                        <h2 className="text-2xl font-black text-white uppercase tracking-tight">Artist Roster</h2>
+                        <Button onClick={() => { setEditingArtist(null); setIsModalOpen(true); }} className="text-[10px] font-black uppercase tracking-widest px-8 shadow-xl shadow-primary/20">Onboard Artist</Button>
+                    </div>
+                    <div className="w-full md:w-80 relative group mt-4">
+                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-primary transition-colors">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                        </div>
+                        <Input placeholder="Search roster..." value={filter} onChange={e => setFilter(e.target.value)} className="pl-11 h-12 bg-black/20 border-gray-700" />
+                    </div>
+                </div>
+                <Table>
+                    <THead>
+                        <TR>
+                            <TH>Identity</TH>
+                            <TH>Role</TH>
+                            <TH>Contact</TH>
+                            <TH>Mappings</TH>
+                            <TH className="text-right">Actions</TH>
+                        </TR>
+                    </THead>
                     <TBody>
                         {isLoading && artists.length === 0 ? (
                             [...Array(10)].map((_, i) => (
