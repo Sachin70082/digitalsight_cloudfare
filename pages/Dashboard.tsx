@@ -121,14 +121,15 @@ const AdminDashboard: React.FC = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
                 <TopStat title="Artists" value={stats.artists} link="/artists" loading={isLoading} />
                 <TopStat title="Labels" value={stats.labels} link="/labels" color="text-blue-400" loading={isLoading} />
                 <TopStat title="Drafted" value={stats.drafted} link="/releases?status=Draft" color="text-gray-400" loading={isLoading} />
                 <TopStat title="Published" value={stats.published} link="/releases?status=Published" color="text-green-500" loading={isLoading} />
                 <TopStat title="Rejected" value={stats.rejected} link="/releases?status=Rejected" color="text-red-500" loading={isLoading} />
-                <TopStat title="Correction" value={stats.correction} link="/correction-queue" color="text-yellow-500" loading={isLoading} />
+                <TopStat title="Correction" value={stats.correction} link="/releases?status=Needs Info" color="text-yellow-500" loading={isLoading} />
                 <TopStat title="Taken Down" value={stats.takedown} link="/releases?status=Takedown" color="text-red-700" loading={isLoading} />
+                <TopStat title="Pending" value={stats.pending} link="/releases?status=Pending" color="text-blue-500" loading={isLoading} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

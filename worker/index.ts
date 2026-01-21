@@ -987,26 +987,56 @@ async function handleStats(request: Request, env: Env, corsHeaders: any) {
         const url = new URL(request.url);
         const labelId = url.searchParams.get('labelId');
 
-        let artistsQuery = 'SELECT COUNT(*) as count FROM artists';
-        let labelsQuery = 'SELECT COUNT(*) as count FROM labels';
-        let releasesQuery = `
-            SELECT 
-                SUM(CASE WHEN status = 'Draft' THEN 1 ELSE 0 END) as drafted,
-                SUM(CASE WHEN status = 'Published' THEN 1 ELSE 0 END) as published,
-                SUM(CASE WHEN status = 'Rejected' THEN 1 ELSE 0 END) as rejected,
-                SUM(CASE WHEN status = 'Needs Info' THEN 1 ELSE 0 END) as correction,
-                SUM(CASE WHEN status = 'Takedown' THEN 1 ELSE 0 END) as takedown,
-                SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) as pending
-            FROM releases
-        `;
-
+        let artistsQuery, labelsQuery, releasesQuery;
         const params: any[] = [];
 
         if (labelId) {
-            artistsQuery += ' WHERE label_id = ?';
-            labelsQuery += ' WHERE parent_label_id = ?';
-            releasesQuery += ' WHERE label_id = ?';
             params.push(labelId);
+            artistsQuery = `
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT COUNT(*) as count FROM artists WHERE label_id IN (SELECT id FROM sub_labels)
+            `;
+            labelsQuery = `
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT COUNT(*) as count FROM labels WHERE parent_label_id IN (SELECT id FROM sub_labels)
+            `;
+            releasesQuery = `
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT 
+                    COUNT(CASE WHEN status = 'Draft' THEN 1 END) as drafted,
+                    COUNT(CASE WHEN status = 'Published' THEN 1 END) as published,
+                    COUNT(CASE WHEN status = 'Rejected' THEN 1 END) as rejected,
+                    COUNT(CASE WHEN status = 'Needs Info' THEN 1 END) as correction,
+                    COUNT(CASE WHEN status = 'Takedown' THEN 1 END) as takedown,
+                    COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending
+                FROM releases
+                WHERE label_id IN (SELECT id FROM sub_labels)
+            `;
+        } else {
+            artistsQuery = 'SELECT COUNT(*) as count FROM artists';
+            labelsQuery = 'SELECT COUNT(*) as count FROM labels';
+            releasesQuery = `
+                SELECT 
+                    COUNT(CASE WHEN status = 'Draft' THEN 1 END) as drafted,
+                    COUNT(CASE WHEN status = 'Published' THEN 1 END) as published,
+                    COUNT(CASE WHEN status = 'Rejected' THEN 1 END) as rejected,
+                    COUNT(CASE WHEN status = 'Needs Info' THEN 1 END) as correction,
+                    COUNT(CASE WHEN status = 'Takedown' THEN 1 END) as takedown,
+                    COUNT(CASE WHEN status = 'Pending' THEN 1 END) as pending
+                FROM releases
+            `;
         }
 
         const artists = await env.DB.prepare(artistsQuery).bind(...params).first() as any;
