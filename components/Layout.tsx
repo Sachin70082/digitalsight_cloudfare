@@ -21,7 +21,7 @@ const HubMenu: React.FC = () => {
     }, []);
 
     const hubItems = [
-        { name: 'Financials', icon: <CashIcon className="w-5 h-5" />, path: '#', color: 'text-primary' },
+        { name: 'Financials', icon: <CashIcon className="w-5 h-5" />, path: 'https://financials.digitalsight.in/', color: 'text-primary', external: true },
         { name: 'Customer Support', icon: <SupportIcon className="w-5 h-5" />, path: '/support', color: 'text-blue-400', external: true },
         { name: 'FAQ & Docs', icon: <QuestionMarkIcon className="w-5 h-5" />, path: '/faq', color: 'text-purple-400', external: true },
     ];
@@ -46,7 +46,7 @@ const HubMenu: React.FC = () => {
                             item.external ? (
                                 <a 
                                     key={item.name}
-                                    href={`/#${item.path}`}
+                                    href={item.path.startsWith('http') ? item.path : `/#${item.path}`}
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     onClick={() => setIsOpen(false)}
