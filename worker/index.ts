@@ -917,16 +917,16 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
             INSERT INTO releases (
                 id, title, version_title, release_type, primary_artist_ids, featured_artist_ids, label_id, 
                 upc, catalogue_number, release_date, status, artwork_url, artwork_file_name, 
-                p_line, c_line, description, explicit, genre, sub_genre, mood, language, 
+                p_line, c_line, explicit, genre, sub_genre, mood, language, 
                 publisher, film_name, film_director, film_producer, film_banner, film_cast, 
                 original_release_date, youtube_content_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
             newId, data.title || 'Untitled Release', data.versionTitle || null, data.releaseType || null,
             JSON.stringify(data.primaryArtistIds || []), JSON.stringify(data.featuredArtistIds || []),
             data.labelId || null, data.upc || null, data.catalogueNumber || null, data.releaseDate || null,
             data.status || 'Draft', data.artworkUrl || null, data.artworkFileName || null,
-            data.pLine || null, data.cLine || null, data.description || null, data.explicit ? 1 : 0,
+            data.pLine || null, data.cLine || null, data.explicit ? 1 : 0,
             data.genre || null, data.subGenre || null, data.mood || null, data.language || null,
             data.publisher || null, data.filmName || null, data.filmDirector || null, data.filmProducer || null,
             data.filmBanner || null, data.filmCast || null, data.originalReleaseDate || null, data.youtubeContentId ? 1 : 0
@@ -990,7 +990,7 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
             UPDATE releases SET 
                 title = ?, version_title = ?, release_type = ?, primary_artist_ids = ?, featured_artist_ids = ?, 
                 upc = ?, catalogue_number = ?, release_date = ?, status = ?, artwork_url = ?, artwork_file_name = ?, 
-                p_line = ?, c_line = ?, description = ?, explicit = ?, genre = ?, sub_genre = ?, mood = ?, language = ?, 
+                p_line = ?, c_line = ?, explicit = ?, genre = ?, sub_genre = ?, mood = ?, language = ?, 
                 publisher = ?, film_name = ?, film_director = ?, film_producer = ?, film_banner = ?, film_cast = ?, 
                 original_release_date = ?, youtube_content_id = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
@@ -1000,7 +1000,7 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
             data.featuredArtistIds ? JSON.stringify(data.featuredArtistIds) : current.featured_artist_ids,
             data.upc ?? current.upc, data.catalogueNumber ?? current.catalogue_number, data.releaseDate ?? current.release_date,
             data.status ?? current.status, data.artworkUrl ?? current.artwork_url, data.artworkFileName ?? current.artwork_file_name,
-            data.pLine ?? current.p_line, data.cLine ?? current.c_line, data.description ?? current.description,
+            data.pLine ?? current.p_line, data.cLine ?? current.c_line,
             data.explicit !== undefined ? (data.explicit ? 1 : 0) : current.explicit,
             data.genre ?? current.genre, data.subGenre ?? current.sub_genre, data.mood ?? current.mood, data.language ?? current.language,
             data.publisher ?? current.publisher, data.filmName ?? current.film_name, data.filmDirector ?? current.film_director,
@@ -1415,7 +1415,6 @@ function mapRelease(r: any) {
         artworkFileName: r.artwork_file_name,
         pLine: r.p_line,
         cLine: r.c_line,
-        description: r.description,
         explicit: !!r.explicit,
         genre: r.genre,
         subGenre: r.sub_genre,

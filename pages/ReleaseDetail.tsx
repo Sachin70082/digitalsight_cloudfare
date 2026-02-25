@@ -284,15 +284,6 @@ const PmaReleaseDetailView: React.FC<{
                 </div>
             </PmaFieldset>
 
-            {/* Description */}
-            <PmaFieldset legend="Marketing Copy / Liner Notes">
-                <div className="p-4">
-                    <div className="border border-[#aaa] p-4 bg-white min-h-[100px] text-black text-sm">
-                        {release.description || <span className="text-[#999]">No description provided.</span>}
-                    </div>
-                </div>
-            </PmaFieldset>
-
             {/* Distribution Platforms */}
             <PmaFieldset legend="Distribution Platforms">
                 <div className="p-4">
@@ -562,17 +553,6 @@ const PartnerReleaseDetailView: React.FC<{
                                         </div>
                                     );
                                 })}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-sm uppercase tracking-widest font-black">Marketing Copy / Liner Notes</CardTitle>
-                        </CardHeader>
-                        <CardContent className="pt-2">
-                            <div className="p-8 bg-black/40 rounded-[2rem] border border-gray-800/40 leading-relaxed text-gray-300 whitespace-pre-wrap font-medium text-lg">
-                                {release.description || 'No marketing description provided for this session.'}
                             </div>
                         </CardContent>
                     </Card>

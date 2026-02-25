@@ -191,7 +191,6 @@ export interface Release {
   artworkFileName: string;
   pLine: string;
   cLine: string;
-  description: string;
   explicit: boolean;
   tracks: Track[];
   artists?: Artist[];

@@ -70,7 +70,7 @@ const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels
       release.genre || '',
       release.subGenre || '',
       release.mood || '',
-      release.description || '',
+      '',
       release.upc || '',
       track.isrc || '',
       label?.name || 'Unknown Label',

@@ -109,7 +109,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         artworkFileName: '',
         pLine: '',
         cLine: '',
-        description: '',
         explicit: false,
         status: ReleaseStatus.DRAFT,
         genre: '',
@@ -412,14 +411,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
                                     <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-black mb-1">Description</label>
-                                    <textarea
-                                        value={formData.description}
-                                        onChange={e => handleChange('description', e.target.value)}
-                                        className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none min-h-[100px] text-black"
-                                    />
-                                </div>
                             </div>
                         </PmaFieldset>
                     )}
@@ -702,9 +693,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
                             <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
-                        </div>
-                         <div className="relative">
-                            <Textarea label="Description" rows={4} placeholder="Describe this session..." value={formData.description} onChange={e => handleChange('description', e.target.value)} className="text-sm" />
                         </div>
                     </div>
                 )}
