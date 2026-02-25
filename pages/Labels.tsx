@@ -98,6 +98,7 @@ const PmaLabelsView: React.FC<{
                             { label: 'Name' },
                             { label: 'ID' },
                             { label: 'Region' },
+                            { label: 'Artist Limit', className: 'text-center' },
                             { label: 'Revenue Share', className: 'text-center' },
                             { label: 'Status', className: 'text-center' },
                             { label: 'Actions', className: 'text-center' }
@@ -112,11 +113,12 @@ const PmaLabelsView: React.FC<{
                                     <PmaTD className="text-center">...</PmaTD>
                                     <PmaTD className="text-center">...</PmaTD>
                                     <PmaTD className="text-center">...</PmaTD>
+                                    <PmaTD className="text-center">...</PmaTD>
                                 </PmaTR>
                             ))
                         ) : paginatedLabels.length === 0 ? (
                             <PmaTR>
-                                <PmaTD colSpan={6} className="text-center py-8 text-[#999]">
+                                <PmaTD colSpan={7} className="text-center py-8 text-[#999]">
                                     No records found
                                 </PmaTD>
                             </PmaTR>
@@ -129,6 +131,9 @@ const PmaLabelsView: React.FC<{
                                     <span className="font-mono text-xs text-black">{label.id?.toUpperCase() || 'N/A'}</span>
                                 </PmaTD>
                                 <PmaTD className="text-black">{label.country || 'Global'}</PmaTD>
+                                <PmaTD className="text-center text-black">
+                                    {label.maxArtists === 0 ? 'Unlimited' : label.maxArtists || 10}
+                                </PmaTD>
                                 <PmaTD className="text-center">
                                     <span className="font-bold text-[#0066cc]">{label.revenueShare || 70}%</span>
                                 </PmaTD>
@@ -280,6 +285,25 @@ const PmaLabelsView: React.FC<{
                                         />
                                     </div>
                                     <div>
+                                        <label className="block text-xs font-bold text-black mb-1">Artist Limit</label>
+                                        <select
+                                            value={formData.maxArtists}
+                                            onChange={e => setFormData({...formData, maxArtists: parseInt(e.target.value)})}
+                                            className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black bg-white"
+                                        >
+                                            <option value={1}>1 Artist</option>
+                                            <option value={2}>2 Artists</option>
+                                            <option value={5}>5 Artists</option>
+                                            <option value={10}>10 Artists</option>
+                                            <option value={20}>20 Artists</option>
+                                            <option value={50}>50 Artists</option>
+                                            <option value={100}>100 Artists</option>
+                                            <option value={0}>Unlimited</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
                                         <label className="block text-xs font-bold text-black mb-1">Website</label>
                                         <input
                                             type="text"
@@ -288,15 +312,15 @@ const PmaLabelsView: React.FC<{
                                             className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
                                         />
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-black mb-1">Address</label>
-                                    <input
-                                        type="text"
-                                        value={formData.address}
-                                        onChange={e => setFormData({...formData, address: e.target.value})}
-                                        className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
-                                    />
+                                    <div>
+                                        <label className="block text-xs font-bold text-black mb-1">Address</label>
+                                        <input
+                                            type="text"
+                                            value={formData.address}
+                                            onChange={e => setFormData({...formData, address: e.target.value})}
+                                            className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         )}
