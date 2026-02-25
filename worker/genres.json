@@ -1,0 +1,17 @@
+{
+  "Film": ["Romantic /Love Songs", "Sad Songs", "Devotional", "Instrumental", "BGM", "Band Songs", "Chill Pop", "Contemporary Pop", "Country Pop/ Regional Pop", "Dance Pop", "Electro Pop", "Indian Pop", "Lo-Fi Pop", "Love Songs", "Punjabi Pop", "Rock", "Soft Rock"],
+  "Pop": ["Indian Pop", "Punjabi Pop", "Rock", "Chill Pop", "Contemporary Pop", "Country Pop/ Regional Pop", "Dance Pop", "Electro Pop", "Lo-Fi Pop", "Band Songs", "Sad Songs", "Soft Rock"],
+  "Indie": ["Indian Indie", "Indie Dance", "Indie Folk", "Indie Hip-Hop", "Indie Lo-Fi", "Indie Pop", "Indie Rock", "Indie Singer -Songwriter"],
+  "HipHop/Rap": ["Alternative Rap", "Gangsta Rap", "Hardcore Rap", "Hip Hop/Rap", "Hip-Hop", "Old School Rap", "Rap", "Underground Rap"],
+  "Folk": ["Ainchaliyan", "Alha", "Atulprasadi", "Baalgeet/ Children Song", "Banvarh", "Barhamasa", "Basant Geet", "Baul Geet", "Bhadu Gaan", "Bhagawati", "Bhand", "Bhangra", "Bhatiali", "Bhavageete", "Bhawaiya", "Bhuta song", "Bihugeet", "Birha", "Borgeet", "Burrakatha", "Chappeli", "Daff", "Dandiya Raas", "Dasakathia", "Deijendrageeti", "Deknni", "Dhamal", "Gadhwali", "Gagor", "Garba", "Ghasiyari Geet", "Ghoomar", "Gidda", "Gugga", "Hafiz Nagma", "Heliam", "Hereileu", "Hori", "Jaanapada Geethe", "Jaita", "Jhoori", "Jhora", "Jhumur", "Jugni", "Kajari", "Kajari/ Kajari /Kajri", "Karwa Chauth Songs", "Khor", "Koligeet", "Kumayuni", "Kummi Paatu", "Lagna Geet /Marriage Song", "Lalongeeti", "Lavani", "Lokgeet", "Loor", "Maand", "Madiga Dappu", "Mando", "Mapilla", "Naatupura Paadalgal", "Naqual", "Nati", "Nautanki", "Nazrulgeeti", "Neuleu", "Nyioga", "Oggu Katha", "Paani Hari", "Pai Song", "Pandavani", "Pankhida", "Patua Sangeet", "Phag Dance", "Powada", "Qawwali", "Rabindra Sangeet", "Rajanikantageeti", "Ramprasadi", "Rasiya", "Rasiya Geet", "Raslila", "Raut Nacha", "Saikuthi Zai", "Sana Lamok", "Shakunakhar-Mangalgeet", "Shyama Sangeet", "Sohar", "Sumangali", "Surma", "Suvvi paatalu", "Tappa", "Teej songs", "Tusu Gaan", "Villu Pattu", "Qawwals"],
+  "Devotional": ["Aarti", "Bhajan", "Carol", "Chalisa", "Chant", "Geet", "Gospel", "Gurbani", "Hymn", "Kirtan", "Mantra", "Paath", "Islamic", "Shabd", "Christian Pop", "Christian Rock"],
+  "Hindustani Classical": ["Instrumental", "Vocal"],
+  "Carnatic Classical": ["Instrumental", "Vocal"],
+  "Ambient/Instrumental": ["Soft", "Easy Listening", "Lounge", "Ambient", "Relaxation"],
+  "Dance": ["Dance", "Breakbeat", "Garage", "Bass", "House", "Techno", "Trance"],
+  "Electronic": ["Electronic", "Ambient", "Bass", "Downtempo", "Dubstep", "Electro-Cha'abi", "Electronica", "IDM/Experimental", "Industrial"],
+  "Rock": ["Pop/Rock", "Rock", "Adult Alternative", "Arena Rock", "Blues-Rock", "Death Metal/Black Metal", "Glam Rock", "Hair Metal", "Hard Rock", "Heavy Metal", "Jam Bands", "Prog-Rock/Art Rock", "Psychedelic", "Rock & Roll", "Rockabilly", "Roots Rock", "Singer/Songwriter", "Surf"],
+  "New Age": ["New Age", "Healing", "Meditation", "Nature", "Yoga"],
+  "Worldwide": ["Worldwide", "Asia"],
+  "Children's Music": ["Children's Music", "Lullabies", "Sing-Along", "Stories"]
+}

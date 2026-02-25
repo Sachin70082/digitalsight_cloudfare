@@ -27,6 +27,10 @@ export default {
     }
 
     try {
+      if (path === '/genres' && method === 'GET') {
+        return await handleGenres(corsHeaders);
+      }
+      
       if (path === '/auth/login' && method === 'POST') {
         return await handleLogin(request, env, corsHeaders);
       }
@@ -177,6 +181,16 @@ import { getWelcomeEmail } from "./emails/welcome";
 import { getLabelRegistrationEmail } from "./emails/labelRegistration";
 import { getCorrectionEmail } from "./emails/correction";
 import { getPublicationEmail } from "./emails/publication";
+import genresData from "./genres.json";
+
+/**
+ * Handle Genres (Public)
+ */
+async function handleGenres(corsHeaders: any) {
+    return new Response(JSON.stringify(genresData), { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    });
+}
 
 /**
  * Handle Change Password (Authenticated)

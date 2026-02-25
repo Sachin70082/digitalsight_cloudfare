@@ -197,6 +197,11 @@ class ApiService {
   async globalSearch(query: string, user: any) {
       return this.request(`/search?q=${encodeURIComponent(query)}`);
   }
+
+  // Genres
+  async getGenres(): Promise<Record<string, string[]>> {
+      return this.request('/genres');
+  }
 }
 
 export const api = new ApiService();

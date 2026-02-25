@@ -38,7 +38,6 @@ const emptyTrack = (num: number): Track => ({
     lyricist: ''
 });
 
-const GENRES = ["Pop", "Hip-Hop", "Rock", "Electronic", "Classical", "Jazz", "World", "Folk", "Bollywood", "Devotional", "Regional", "Lo-Fi", "R&B"];
 const MOODS = ["Happy", "Sad", "Energetic", "Relaxed", "Dark", "Romantic", "Epic", "Chill", "Aggressive"];
 const LANGUAGES = [
   "English",
@@ -90,6 +89,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     const [submissionNote, setSubmissionNote] = useState('');
     const [labelArtists, setLabelArtists] = useState<Artist[]>([]);
     const [hierarchyLabels, setHierarchyLabels] = useState<Label[]>([]);
+    const [genresMap, setGenresMap] = useState<Record<string, string[]>>({});
 
     const [stagedArtwork, setStagedArtwork] = useState<File | null>(null);
     const [stagedAudio, setStagedAudio] = useState<Record<number, File>>({});
@@ -112,7 +112,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         description: '',
         explicit: false,
         status: ReleaseStatus.DRAFT,
-        genre: GENRES[0],
+        genre: '',
         subGenre: '',
         mood: MOODS[0],
         language: LANGUAGES[0],
@@ -132,6 +132,14 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         const loadInitialData = async () => {
             const isPlatformSide = user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE;
             const targetLabelId = formData.labelId || user?.labelId;
+
+            // --- Fetch Genres ---
+            try {
+                const genres = await api.getGenres();
+                setGenresMap(genres);
+            } catch (err) {
+                console.error('Failed to fetch genres:', err);
+            }
 
             // --- Fetch Artists (independent, always attempted) ---
             try {
@@ -440,10 +448,24 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     <PmaSelect
                                         label="Primary Genre"
                                         value={formData.genre}
-                                        onChange={val => handleChange('genre', val)}
-                                        options={GENRES.map(g => ({ value: g, label: g }))}
+                                        onChange={val => {
+                                            handleChange('genre', val);
+                                            handleChange('subGenre', ''); // Reset sub-genre when genre changes
+                                        }}
+                                        options={[
+                                            { value: '', label: 'Select Primary Genre' },
+                                            ...Object.keys(genresMap).map(g => ({ value: g, label: g }))
+                                        ]}
                                     />
-                                    <PmaInput label="Sub-Genre" value={formData.subGenre} onChange={val => handleChange('subGenre', val)} placeholder="e.g. Trap" />
+                                    <PmaSelect
+                                        label="Sub-Genre"
+                                        value={formData.subGenre}
+                                        onChange={val => handleChange('subGenre', val)}
+                                        options={[
+                                            { value: '', label: 'Select Sub-Genre' },
+                                            ...(genresMap[formData.genre] || []).map(sg => ({ value: sg, label: sg }))
+                                        ]}
+                                    />
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <PmaSelect
@@ -715,11 +737,29 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-1.5">
                                 <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Primary Genre</label>
-                                <select value={formData.genre} onChange={e => handleChange('genre', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
-                                    {GENRES.map(g => <option key={g} value={g} className="bg-gray-900">{g}</option>)}
+                                <select 
+                                    value={formData.genre} 
+                                    onChange={e => {
+                                        handleChange('genre', e.target.value);
+                                        handleChange('subGenre', ''); // Reset sub-genre when genre changes
+                                    }} 
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                                >
+                                    <option value="" className="bg-gray-900">Select Primary Genre</option>
+                                    {Object.keys(genresMap).map(g => <option key={g} value={g} className="bg-gray-900">{g}</option>)}
                                 </select>
                             </div>
-                            <Input label="Sub-Genre" placeholder="e.g. Trap, Melodic" value={formData.subGenre} onChange={e => handleChange('subGenre', e.target.value)} className="h-12" />
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Sub-Genre</label>
+                                <select 
+                                    value={formData.subGenre} 
+                                    onChange={e => handleChange('subGenre', e.target.value)} 
+                                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                                >
+                                    <option value="" className="bg-gray-900">Select Sub-Genre</option>
+                                    {(genresMap[formData.genre] || []).map(sg => <option key={sg} value={sg} className="bg-gray-900">{sg}</option>)}
+                                </select>
+                            </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div className="space-y-1.5">
