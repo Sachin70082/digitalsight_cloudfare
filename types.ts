@@ -128,6 +128,7 @@ export interface Artist {
   spotifyId?: string;
   appleMusicId?: string;
   instagramUrl?: string;
+  facebookUrl?: string;
   email?: string; // Added for login capability
 }
 
@@ -144,11 +145,15 @@ export enum ReleaseStatus {
 }
 
 export enum ReleaseType {
-    SINGLE = 'Single',
-    EP = 'EP',
     ALBUM = 'Album',
+    SINGLE = 'Single',
+}
+
+export enum ContentType {
+    ALBUM = 'Album',
+    SINGLE = 'Single',
     COMPILATION = 'Compilation',
-    SOUNDTRACK = 'Soundtrack',
+    REMIX = 'Remix',
 }
 
 export interface Track {
@@ -166,13 +171,24 @@ export interface Track {
   audioUrl: string;
   
   // Excel Meta
-  crbtCutName?: string;
-  crbtTime?: string; // MM:SS
   dolbyIsrc?: string;
   composer?: string;
   lyricist?: string;
   language?: string;
   contentType?: string; // Music, Video
+  crbtTitle?: string;
+  crbtDuration?: string;
+  
+  // New Metadata Fields
+  remixerName?: string;
+  composerIpi?: string;
+  lyricistIpi?: string;
+  composerIprs?: string;
+  lyricistIprs?: string;
+  isInstrumental?: string;
+  appleRemixerId?: string;
+  appleComposerId?: string;
+  appleLyricistId?: string;
 }
 
 export interface Release {
@@ -180,6 +196,7 @@ export interface Release {
   title: string;
   versionTitle?: string;
   releaseType: ReleaseType;
+  contentType?: ContentType;
   primaryArtistIds: string[];
   featuredArtistIds: string[];
   labelId: string;
@@ -211,6 +228,16 @@ export interface Release {
   filmCast?: string;
   originalReleaseDate?: string;
   youtubeContentId?: boolean;
+
+  // New Metadata Fields
+  labelIpi?: string;
+  labelIprs?: string;
+  description?: string;
+  timeOfMusicRelease?: string;
+  dateOfExpiry?: string;
+  appleProducerId?: string;
+  appleDirectorId?: string;
+  appleStarcastId?: string;
 }
 
 // Added RevenueEntry for accounting features

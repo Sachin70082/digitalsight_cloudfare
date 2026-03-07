@@ -755,8 +755,8 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
             }
         }
 
-        await env.DB.prepare('INSERT INTO artists (id, name, label_id, type, spotify_id, apple_music_id, instagram_url, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-            .bind(newId, name, labelId, type, spotifyId, appleMusicId, instagramUrl, email)
+        await env.DB.prepare('INSERT INTO artists (id, name, label_id, type, spotify_id, apple_music_id, instagram_url, facebook_url, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+            .bind(newId, name, labelId, type, spotifyId, appleMusicId, instagramUrl, data.facebookUrl || null, email)
             .run();
         return new Response(JSON.stringify({ id: newId, ...data }), { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -788,8 +788,8 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
             }
         }
 
-        await env.DB.prepare('UPDATE artists SET name = ?, label_id = ?, type = ?, spotify_id = ?, apple_music_id = ?, instagram_url = ?, email = ? WHERE id = ?')
-            .bind(name, labelId, type, spotifyId, appleMusicId, instagramUrl, email, id)
+        await env.DB.prepare('UPDATE artists SET name = ?, label_id = ?, type = ?, spotify_id = ?, apple_music_id = ?, instagram_url = ?, facebook_url = ?, email = ? WHERE id = ?')
+            .bind(name, labelId, type, spotifyId, appleMusicId, instagramUrl, data.facebookUrl || null, email, id)
             .run();
         return new Response(JSON.stringify({ success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -915,21 +915,25 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
 
         batch.push(env.DB.prepare(`
             INSERT INTO releases (
-                id, title, version_title, release_type, primary_artist_ids, featured_artist_ids, label_id, 
+                id, title, version_title, release_type, content_type, primary_artist_ids, featured_artist_ids, label_id, 
                 upc, catalogue_number, release_date, status, artwork_url, artwork_file_name, 
                 p_line, c_line, explicit, genre, sub_genre, mood, language, 
                 publisher, film_name, film_director, film_producer, film_banner, film_cast, 
-                original_release_date, youtube_content_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                original_release_date, youtube_content_id,
+                label_ipi, label_iprs, description, time_of_music_release, date_of_expiry,
+                apple_producer_id, apple_director_id, apple_starcast_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(
-            newId, data.title || 'Untitled Release', data.versionTitle || null, data.releaseType || null,
+            newId, data.title || 'Untitled Release', data.versionTitle || null, data.releaseType || null, data.contentType || null,
             JSON.stringify(data.primaryArtistIds || []), JSON.stringify(data.featuredArtistIds || []),
             data.labelId || null, data.upc || null, data.catalogueNumber || null, data.releaseDate || null,
             data.status || 'Draft', data.artworkUrl || null, data.artworkFileName || null,
             data.pLine || null, data.cLine || null, data.explicit ? 1 : 0,
             data.genre || null, data.subGenre || null, data.mood || null, data.language || null,
             data.publisher || null, data.filmName || null, data.filmDirector || null, data.filmProducer || null,
-            data.filmBanner || null, data.filmCast || null, data.originalReleaseDate || null, data.youtubeContentId ? 1 : 0
+            data.filmBanner || null, data.filmCast || null, data.originalReleaseDate || null, data.youtubeContentId ? 1 : 0,
+            data.labelIpi || null, data.labelIprs || null, data.description || null, data.timeOfMusicRelease || null, data.dateOfExpiry || null,
+            data.appleProducerId || null, data.appleDirectorId || null, data.appleStarcastId || null
         ));
 
         if (data.tracks && Array.isArray(data.tracks)) {
@@ -938,17 +942,21 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
                     INSERT INTO tracks (
                         id, release_id, track_number, disc_number, title, version_title, 
                         primary_artist_ids, featured_artist_ids, isrc, duration, explicit, 
-                        audio_file_name, audio_url, crbt_cut_name, crbt_time, dolby_isrc, 
-                        composer, lyricist, language, content_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        audio_file_name, audio_url, dolby_isrc, 
+                        composer, lyricist, language, content_type, crbt_title, crbt_duration,
+                        remixer_name, composer_ipi, lyricist_ipi, composer_iprs, lyricist_iprs,
+                        is_instrumental, apple_remixer_id, apple_composer_id, apple_lyricist_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).bind(
                     crypto.randomUUID(), newId, track.trackNumber || 0, track.discNumber || 1,
                     track.title || 'Untitled Track', track.versionTitle || null,
                     JSON.stringify(track.primaryArtistIds || []), JSON.stringify(track.featuredArtistIds || []),
                     track.isrc || null, track.duration || 0, track.explicit ? 1 : 0,
-                    track.audioFileName || null, track.audioUrl || null, track.crbtCutName || null,
-                    track.crbtTime || null, track.dolbyIsrc || null, track.composer || null,
-                    track.lyricist || null, track.language || null, track.contentType || 'Music'
+                    track.audioFileName || null, track.audioUrl || null, track.dolbyIsrc || null, track.composer || null,
+                    track.lyricist || null, track.language || null, track.contentType || 'Music',
+                    track.crbtTitle || null, track.crbtDuration || null,
+                    track.remixerName || null, track.composerIpi || null, track.lyricistIpi || null, track.composerIprs || null, track.lyricistIprs || null,
+                    track.isInstrumental || null, track.appleRemixerId || null, track.appleComposerId || null, track.appleLyricistId || null
                 ));
             }
         }
@@ -988,14 +996,17 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
         // Update Metadata
         batch.push(env.DB.prepare(`
             UPDATE releases SET 
-                title = ?, version_title = ?, release_type = ?, primary_artist_ids = ?, featured_artist_ids = ?, 
+                title = ?, version_title = ?, release_type = ?, content_type = ?, primary_artist_ids = ?, featured_artist_ids = ?, 
                 upc = ?, catalogue_number = ?, release_date = ?, status = ?, artwork_url = ?, artwork_file_name = ?, 
                 p_line = ?, c_line = ?, explicit = ?, genre = ?, sub_genre = ?, mood = ?, language = ?, 
                 publisher = ?, film_name = ?, film_director = ?, film_producer = ?, film_banner = ?, film_cast = ?, 
-                original_release_date = ?, youtube_content_id = ?, updated_at = CURRENT_TIMESTAMP
+                original_release_date = ?, youtube_content_id = ?, 
+                label_ipi = ?, label_iprs = ?, description = ?, time_of_music_release = ?, date_of_expiry = ?,
+                apple_producer_id = ?, apple_director_id = ?, apple_starcast_id = ?,
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         `).bind(
-            data.title ?? current.title, data.versionTitle ?? current.version_title, data.releaseType ?? current.release_type,
+            data.title ?? current.title, data.versionTitle ?? current.version_title, data.releaseType ?? current.release_type, data.contentType ?? current.content_type,
             data.primaryArtistIds ? JSON.stringify(data.primaryArtistIds) : current.primary_artist_ids,
             data.featuredArtistIds ? JSON.stringify(data.featuredArtistIds) : current.featured_artist_ids,
             data.upc ?? current.upc, data.catalogueNumber ?? current.catalogue_number, data.releaseDate ?? current.release_date,
@@ -1007,6 +1018,9 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
             data.filmProducer ?? current.film_producer, data.filmBanner ?? current.film_banner, data.filmCast ?? current.film_cast,
             data.originalReleaseDate ?? current.original_release_date,
             data.youtubeContentId !== undefined ? (data.youtubeContentId ? 1 : 0) : current.youtube_content_id,
+            data.labelIpi ?? current.label_ipi, data.labelIprs ?? current.label_iprs, data.description ?? current.description, 
+            data.timeOfMusicRelease ?? current.time_of_music_release, data.dateOfExpiry ?? current.date_of_expiry,
+            data.appleProducerId ?? current.apple_producer_id, data.appleDirectorId ?? current.apple_director_id, data.appleStarcastId ?? current.apple_starcast_id,
             id
         ));
 
@@ -1018,17 +1032,21 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
                     INSERT INTO tracks (
                         id, release_id, track_number, disc_number, title, version_title, 
                         primary_artist_ids, featured_artist_ids, isrc, duration, explicit, 
-                        audio_file_name, audio_url, crbt_cut_name, crbt_time, dolby_isrc, 
-                        composer, lyricist, language, content_type
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        audio_file_name, audio_url, dolby_isrc, 
+                        composer, lyricist, language, content_type, crbt_title, crbt_duration,
+                        remixer_name, composer_ipi, lyricist_ipi, composer_iprs, lyricist_iprs,
+                        is_instrumental, apple_remixer_id, apple_composer_id, apple_lyricist_id
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 `).bind(
                     track.id || crypto.randomUUID(), id, track.trackNumber || 0, track.discNumber || 1,
                     track.title || 'Untitled Track', track.versionTitle || null,
                     JSON.stringify(track.primaryArtistIds || []), JSON.stringify(track.featuredArtistIds || []),
                     track.isrc || null, track.duration || 0, track.explicit ? 1 : 0,
-                    track.audioFileName || null, track.audioUrl || null, track.crbtCutName || null,
-                    track.crbtTime || null, track.dolbyIsrc || null, track.composer || null,
-                    track.lyricist || null, track.language || null, track.contentType || 'Music'
+                    track.audioFileName || null, track.audioUrl || null, track.dolbyIsrc || null, track.composer || null,
+                    track.lyricist || null, track.language || null, track.contentType || 'Music',
+                    track.crbtTitle || null, track.crbtDuration || null,
+                    track.remixerName || null, track.composerIpi || null, track.lyricistIpi || null, track.composerIprs || null, track.lyricistIprs || null,
+                    track.isInstrumental || null, track.appleRemixerId || null, track.appleComposerId || null, track.appleLyricistId || null
                 ));
             }
         }
@@ -1353,6 +1371,7 @@ function mapArtist(a: any) {
         spotifyId: a.spotify_id,
         appleMusicId: a.apple_music_id,
         instagramUrl: a.instagram_url,
+        facebookUrl: a.facebook_url,
         email: a.email,
         createdAt: a.created_at
     };
@@ -1386,13 +1405,22 @@ function mapTrack(t: any) {
         explicit: !!t.explicit,
         audioFileName: t.audio_file_name,
         audioUrl: t.audio_url,
-        crbtCutName: t.crbt_cut_name,
-        crbtTime: t.crbt_time,
         dolbyIsrc: t.dolby_isrc,
         composer: t.composer,
         lyricist: t.lyricist,
         language: t.language,
         contentType: t.content_type,
+        crbtTitle: t.crbt_title,
+        crbtDuration: t.crbt_duration,
+        remixerName: t.remixer_name,
+        composerIpi: t.composer_ipi,
+        lyricistIpi: t.lyricist_ipi,
+        composerIprs: t.composer_iprs,
+        lyricistIprs: t.lyricist_iprs,
+        isInstrumental: t.is_instrumental,
+        appleRemixerId: t.apple_remixer_id,
+        appleComposerId: t.apple_composer_id,
+        appleLyricistId: t.apple_lyricist_id,
         createdAt: t.created_at
     };
 }
@@ -1404,6 +1432,7 @@ function mapRelease(r: any) {
         title: r.title,
         versionTitle: r.version_title,
         releaseType: r.release_type,
+        contentType: r.content_type,
         primaryArtistIds: JSON.parse(r.primary_artist_ids || '[]'),
         featuredArtistIds: JSON.parse(r.featured_artist_ids || '[]'),
         labelId: r.label_id,
@@ -1428,6 +1457,14 @@ function mapRelease(r: any) {
         filmCast: r.film_cast,
         originalReleaseDate: r.original_release_date,
         youtubeContentId: !!r.youtube_content_id,
+        labelIpi: r.label_ipi,
+        labelIprs: r.label_iprs,
+        description: r.description,
+        timeOfMusicRelease: r.time_of_music_release,
+        dateOfExpiry: r.date_of_expiry,
+        appleProducerId: r.apple_producer_id,
+        appleDirectorId: r.apple_director_id,
+        appleStarcastId: r.apple_starcast_id,
         createdAt: r.created_at,
         updatedAt: r.updated_at
     };

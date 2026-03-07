@@ -20,6 +20,7 @@ const PmaArtistForm: React.FC<{
     const [spotifyId, setSpotifyId] = useState(initialData?.spotifyId || '');
     const [appleMusicId, setAppleMusicId] = useState(initialData?.appleMusicId || '');
     const [instagramUrl, setInstagramUrl] = useState(initialData?.instagramUrl || '');
+    const [facebookUrl, setFacebookUrl] = useState(initialData?.facebookUrl || '');
     const [targetLabelId, setTargetLabelId] = useState(initialData?.labelId || user?.labelId || '');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -36,6 +37,7 @@ const PmaArtistForm: React.FC<{
             spotifyId,
             appleMusicId,
             instagramUrl,
+            facebookUrl,
             labelId: targetLabelId,
         };
         
@@ -145,15 +147,27 @@ const PmaArtistForm: React.FC<{
                         />
                     </div>
                 </div>
-                <div className="mt-4">
-                    <label className="block text-xs font-bold text-black mb-1">Instagram Handle/URL</label>
-                    <input
-                        type="text"
-                        value={instagramUrl}
-                        onChange={e => setInstagramUrl(e.target.value)}
-                        placeholder="https://instagram.com/..."
-                        className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
-                    />
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs font-bold text-black mb-1">Instagram Handle/URL</label>
+                        <input
+                            type="text"
+                            value={instagramUrl}
+                            onChange={e => setInstagramUrl(e.target.value)}
+                            placeholder="https://instagram.com/..."
+                            className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-black mb-1">Facebook Page URL</label>
+                        <input
+                            type="text"
+                            value={facebookUrl}
+                            onChange={e => setFacebookUrl(e.target.value)}
+                            placeholder="https://facebook.com/..."
+                            className="w-full border-2 border-[#ccc] px-3 py-2 text-sm focus:border-[#0066cc] outline-none text-black"
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -357,6 +371,7 @@ const PartnerArtistForm: React.FC<{
     const [spotifyId, setSpotifyId] = useState(initialData?.spotifyId || '');
     const [appleMusicId, setAppleMusicId] = useState(initialData?.appleMusicId || '');
     const [instagramUrl, setInstagramUrl] = useState(initialData?.instagramUrl || '');
+    const [facebookUrl, setFacebookUrl] = useState(initialData?.facebookUrl || '');
     const [targetLabelId, setTargetLabelId] = useState(initialData?.labelId || user?.labelId || '');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -373,6 +388,7 @@ const PartnerArtistForm: React.FC<{
             spotifyId,
             appleMusicId,
             instagramUrl,
+            facebookUrl,
             labelId: targetLabelId,
         };
         
@@ -446,7 +462,10 @@ const PartnerArtistForm: React.FC<{
                     <Input label="Spotify Artist ID" value={spotifyId} onChange={e => setSpotifyId(e.target.value)} placeholder="e.g. 5444a57..." />
                     <Input label="Apple Music ID" value={appleMusicId} onChange={e => setAppleMusicId(e.target.value)} placeholder="e.g. 14407..." />
                 </div>
-                <Input label="Instagram Handle/URL" value={instagramUrl} onChange={e => setInstagramUrl(e.target.value)} placeholder="https://instagram.com/..." />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Input label="Instagram Handle/URL" value={instagramUrl} onChange={e => setInstagramUrl(e.target.value)} placeholder="https://instagram.com/..." />
+                    <Input label="Facebook Page URL" value={facebookUrl} onChange={e => setFacebookUrl(e.target.value)} placeholder="https://facebook.com/..." />
+                </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-8 border-t border-white/5 mt-4">

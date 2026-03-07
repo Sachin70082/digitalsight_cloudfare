@@ -114,6 +114,12 @@ const App: React.FC = () => {
 
   return (
     <AppContext.Provider value={{ user, login, logout, showToast, fontSize, setFontSize }}>
+      <style>{`
+        input[type="date"]::-webkit-calendar-picker-indicator {
+          filter: invert(1);
+          cursor: pointer;
+        }
+      `}</style>
       <BrowserRouter>
         {toast && <Toast message={toast.message} type={toast.type} onClear={() => setToast(null)} />}
         <Suspense fallback={<div className="bg-gray-900 h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>}>

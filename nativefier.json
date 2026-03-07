@@ -1,0 +1,16 @@
+{
+  "name": "DigitalSight",
+  "icon": "icon.ico",
+  "internal-urls": ".*",
+  "browserwindow-options": {
+    "webPreferences": {
+      "sandbox": false,
+      "contextIsolation": false
+    }
+  },
+  "file-download-options": {
+    "saveAs": true
+  },
+  "single-instance": true,
+  "maximize": true
+}

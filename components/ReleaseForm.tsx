@@ -1,7 +1,7 @@
 
 import React, { useState, useContext, useEffect } from 'react';
 import { AppContext } from '../App';
-import { Release, Track, ReleaseType, Artist, ReleaseStatus, Label, UserRole } from '../types';
+import { Release, Track, ReleaseType, ContentType, Artist, ReleaseStatus, Label, UserRole } from '../types';
 import { Button, Input, Textarea, Spinner } from './ui';
 import { SparklesIcon, UploadIcon, XCircleIcon, MusicIcon, CheckCircleIcon } from './Icons';
 import { PmaFieldset, PmaTable, PmaTR, PmaTD, PmaButton, PmaInput, PmaSelect, PmaStatusBadge, PmaInfoBar } from './PmaStyle';
@@ -21,6 +21,14 @@ const sanitizeFilename = (name: string) => {
     return name.toLowerCase().trim().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
 };
 
+const formatDuration = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    const limited = digits.slice(0, 6);
+    if (limited.length <= 2) return limited;
+    if (limited.length <= 4) return `${limited.slice(0, 2)}:${limited.slice(2)}`;
+    return `${limited.slice(0, 2)}:${limited.slice(2, 4)}:${limited.slice(4)}`;
+};
+
 const emptyTrack = (num: number): Track => ({
     id: `tr-${Date.now()}-${num}`,
     trackNumber: num,
@@ -35,7 +43,18 @@ const emptyTrack = (num: number): Track => ({
     audioFileName: '',
     audioUrl: '',
     composer: '',
-    lyricist: ''
+    lyricist: '',
+    crbtTitle: '',
+    crbtDuration: '',
+    remixerName: '',
+    composerIpi: '',
+    lyricistIpi: '',
+    composerIprs: 'No',
+    lyricistIprs: 'No',
+    isInstrumental: 'No',
+    appleRemixerId: '',
+    appleComposerId: '',
+    appleLyricistId: ''
 });
 
 const MOODS = ["Happy", "Sad", "Energetic", "Relaxed", "Dark", "Romantic", "Epic", "Chill", "Aggressive"];
@@ -94,17 +113,24 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
     const [stagedArtwork, setStagedArtwork] = useState<File | null>(null);
     const [stagedAudio, setStagedAudio] = useState<Record<number, File>>({});
 
+    const getMinReleaseDate = () => {
+        const d = new Date();
+        d.setDate(d.getDate() + 3);
+        return d.toISOString().split('T')[0];
+    };
+
     const [formData, setFormData] = useState<FormData>({
         id: initialReleaseId || `draft-${Date.now()}`,
         title: '',
         versionTitle: '',
-        releaseType: ReleaseType.SINGLE,
+        releaseType: ReleaseType.ALBUM,
+        contentType: ContentType.ALBUM,
         primaryArtistIds: [],
         featuredArtistIds: [],
         labelId: user?.labelId || '',
         upc: '',
         catalogueNumber: '',
-        releaseDate: new Date().toISOString().split('T')[0],
+        releaseDate: getMinReleaseDate(),
         artworkUrl: '', 
         artworkFileName: '',
         pLine: '',
@@ -124,7 +150,15 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         originalReleaseDate: '',
         tracks: [],
         notes: [],
-        youtubeContentId: false
+        youtubeContentId: false,
+        labelIpi: '',
+        labelIprs: 'No',
+        description: '',
+        timeOfMusicRelease: '00:00:00',
+        dateOfExpiry: '',
+        appleProducerId: '',
+        appleDirectorId: '',
+        appleStarcastId: ''
     });
 
     useEffect(() => {
@@ -299,14 +333,85 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
         return { artworkUrl: finalArtworkUrl, tracks: updatedTracks };
     };
 
+    const validateStep = (stepNum: number): boolean => {
+        if (stepNum === 1) {
+            if (!formData.title) { alert('Album Title is mandatory.'); return false; }
+            if (!formData.releaseType) { alert('Album Type is mandatory.'); return false; }
+            if (!formData.contentType) { alert('Content Type is mandatory.'); return false; }
+            if (!formData.primaryArtistIds || formData.primaryArtistIds.length === 0) { alert('Primary Artist(s) is mandatory.'); return false; }
+        }
+        if (stepNum === 2) {
+            if (!formData.releaseDate) { alert('Release Date is mandatory.'); return false; }
+            
+            const selectedDate = new Date(formData.releaseDate);
+            const minDate = new Date();
+            minDate.setDate(minDate.getDate() + 3);
+            minDate.setHours(0, 0, 0, 0);
+            
+            if (selectedDate < minDate) {
+                alert('Release Date must be at least 3 days from today.');
+                return false;
+            }
+
+            if (!formData.pLine) { alert('P-Line is mandatory.'); return false; }
+            if (!formData.cLine) { alert('C-Line is mandatory.'); return false; }
+            if (!formData.publisher) { alert('Publisher is mandatory.'); return false; }
+        }
+        if (stepNum === 3) {
+            if (!formData.genre) { alert('Primary Genre is mandatory.'); return false; }
+            if (!formData.subGenre) { alert('Sub-Genre is mandatory.'); return false; }
+            if (!formData.mood) { alert('Core Mood is mandatory.'); return false; }
+            if (!formData.language) { alert('Language is mandatory.'); return false; }
+            // Parental Advisory is always set (default Not Explicit)
+        }
+        if (stepNum === 5) {
+            if (!formData.tracks || formData.tracks.length === 0) { alert('At least one track is mandatory.'); return false; }
+            for (let i = 0; i < formData.tracks.length; i++) {
+                const t = formData.tracks[i];
+                if (!t.title) { alert(`Track ${i+1}: Title is mandatory.`); return false; }
+                if (!t.primaryArtistIds || t.primaryArtistIds.length === 0) { alert(`Track ${i+1}: Primary Artist(s) is mandatory.`); return false; }
+                if (!t.composer) { alert(`Track ${i+1}: Composer is mandatory.`); return false; }
+                if (!t.lyricist) { alert(`Track ${i+1}: Lyricist is mandatory.`); return false; }
+                if (!t.audioUrl) { alert(`Track ${i+1}: WAV Master is mandatory.`); return false; }
+            }
+        }
+        if (stepNum === 6) {
+            if (!formData.artworkUrl) { alert('Cover art is mandatory.'); return false; }
+        }
+        return true;
+    };
+
+    const handleNext = () => {
+        if (validateStep(step)) {
+            setStep(s => s + 1);
+        }
+    };
+
+    const handleTabClick = (targetStep: number) => {
+        if (isSubmitting) return;
+        if (targetStep <= step) {
+            setStep(targetStep);
+        } else {
+            // Validate all steps between current and target
+            for (let i = step; i < targetStep; i++) {
+                if (!validateStep(i)) return;
+            }
+            setStep(targetStep);
+        }
+    };
+
     const handleAction = async (isSubmission: boolean) => {
         if (!user || !user.labelId) return;
-        if (!formData.title) { alert('Title is mandatory.'); setStep(1); return; }
-        if (!formData.labelId) { alert('Target Label is mandatory.'); setStep(1); return; }
-        if (isSubmission) {
-            if (!formData.artworkUrl) { alert('Cover art is mandatory for submission.'); setStep(6); return; }
-            if ((formData.tracks || []).some(t => !t.audioUrl)) { alert('All tracks must have masters for submission.'); setStep(5); return; }
+        
+        // Validate all steps up to the current one
+        for (let i = 1; i <= 6; i++) {
+            if (i === 4) continue; // Skip optional Film step
+            if (!validateStep(i)) {
+                setStep(i);
+                return;
+            }
         }
+
         try {
             const { artworkUrl, tracks } = await performUploads();
             const newNotes = [...(formData.notes || [])];
@@ -374,7 +479,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                     {['General', 'Commercial', 'Genre', 'Film', 'Tracks', 'Artwork', 'Review'].map((name, index) => (
                         <button
                             key={name}
-                            onClick={() => !isSubmitting && setStep(index + 1)}
+                            onClick={() => handleTabClick(index + 1)}
                             className={`px-4 py-2 text-xs font-bold border-t-2 border-x-2 -mb-[2px] rounded-t transition-colors ${
                                 step === index + 1 
                                     ? 'bg-white border-[#ccc] border-b-white text-black' 
@@ -399,16 +504,24 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     />
                                 )}
                                 <div className="grid grid-cols-2 gap-4">
-                                    <PmaInput label="Release Title" value={formData.title} onChange={val => handleChange('title', val)} placeholder="e.g. Neon Nights" />
-                                    <PmaSelect
-                                        label="Release Type"
-                                        value={formData.releaseType}
-                                        onChange={val => handleChange('releaseType', val as ReleaseType)}
-                                        options={Object.values(ReleaseType).map(t => ({ value: t, label: t }))}
-                                    />
+                                    <PmaInput label="Album Title *" value={formData.title} onChange={val => handleChange('title', val)} placeholder="e.g. Neon Nights" />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <PmaSelect
+                                            label="Album Type *"
+                                            value={formData.releaseType}
+                                            onChange={val => handleChange('releaseType', val as ReleaseType)}
+                                            options={Object.values(ReleaseType).map(t => ({ value: t, label: t }))}
+                                        />
+                                        <PmaSelect
+                                            label="Content Type *"
+                                            value={formData.contentType || ContentType.ALBUM}
+                                            onChange={val => handleChange('contentType', val as ContentType)}
+                                            options={Object.values(ContentType).map(t => ({ value: t, label: t }))}
+                                        />
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
+                                    <ArtistSelector label="Primary Artist(s) *" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
                                     <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
                                 </div>
                             </div>
@@ -423,11 +536,25 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     <PmaInput label="Catalogue #" value={formData.catalogueNumber} onChange={val => handleChange('catalogueNumber', val)} placeholder="e.g. LAB-001" />
                                 </div>
                                 <div className="grid grid-cols-3 gap-4">
-                                    <PmaInput label="Release Date" type="date" value={formData.releaseDate} onChange={val => handleChange('releaseDate', val)} />
-                                    <PmaInput label="P-Line" value={formData.pLine} onChange={val => handleChange('pLine', val)} placeholder="e.g. 2024 DigitalSight" />
-                                    <PmaInput label="C-Line" value={formData.cLine} onChange={val => handleChange('cLine', val)} placeholder="e.g. 2024 DigitalSight" />
+                                    <PmaInput label="Release Date *" type="date" value={formData.releaseDate} onChange={val => handleChange('releaseDate', val)} />
+                                    <PmaInput label="P-Line *" value={formData.pLine} onChange={val => handleChange('pLine', val)} placeholder="e.g. 2024 DigitalSight" />
+                                    <PmaInput label="C-Line *" value={formData.cLine} onChange={val => handleChange('cLine', val)} placeholder="e.g. 2024 DigitalSight" />
                                 </div>
-                                <PmaInput label="Publisher" value={formData.publisher} onChange={val => handleChange('publisher', val)} placeholder="Company Name" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <PmaInput label="Publisher *" value={formData.publisher} onChange={val => handleChange('publisher', val)} placeholder="Company Name" />
+                                    <PmaInput label="Description" value={formData.description || ''} onChange={val => handleChange('description', val)} placeholder="Album description" />
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                    <PmaInput label="IPI (Label)" value={formData.labelIpi || ''} onChange={val => handleChange('labelIpi', val)} />
+                                    <PmaSelect
+                                        label="IPRS Ownership (Label)"
+                                        value={formData.labelIprs || 'Yes'}
+                                        onChange={val => handleChange('labelIprs', val)}
+                                        options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]}
+                                    />
+                                    <PmaInput label="Time of Music Release" value={formData.timeOfMusicRelease || '00:00:00'} onChange={val => handleChange('timeOfMusicRelease', val)} placeholder="00:00:00" />
+                                </div>
+                                <PmaInput label="Date of Expiry" type="date" value={formData.dateOfExpiry || ''} onChange={val => handleChange('dateOfExpiry', val)} />
                             </div>
                         </PmaFieldset>
                     )}
@@ -437,7 +564,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             <div className="p-4 space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <PmaSelect
-                                        label="Primary Genre"
+                                        label="Primary Genre *"
                                         value={formData.genre}
                                         onChange={val => {
                                             handleChange('genre', val);
@@ -449,7 +576,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                         ]}
                                     />
                                     <PmaSelect
-                                        label="Sub-Genre"
+                                        label="Sub-Genre *"
                                         value={formData.subGenre}
                                         onChange={val => handleChange('subGenre', val)}
                                         options={[
@@ -460,22 +587,24 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <PmaSelect
-                                        label="Core Mood"
+                                        label="Core Mood *"
                                         value={formData.mood}
                                         onChange={val => handleChange('mood', val)}
                                         options={MOODS.map(m => ({ value: m, label: m }))}
                                     />
                                     <PmaSelect
-                                        label="Language"
+                                        label="Language *"
                                         value={formData.language}
                                         onChange={val => handleChange('language', val)}
                                         options={LANGUAGES.map(l => ({ value: l, label: l }))}
                                     />
                                 </div>
-                                <label className="flex items-center gap-2 cursor-pointer">
-                                    <input type="checkbox" checked={formData.explicit} onChange={e => handleChange('explicit', e.target.checked)} />
-                                    <span className="text-sm font-bold text-[#333]">Explicit Content</span>
-                                </label>
+                                <PmaSelect
+                                    label="Parental Advisory *"
+                                    value={formData.explicit ? 'Explicit' : 'Not Explicit'}
+                                    onChange={val => handleChange('explicit', val === 'Explicit')}
+                                    options={[{ value: 'Not Explicit', label: 'Not Explicit' }, { value: 'Explicit', label: 'Explicit' }]}
+                                />
                             </div>
                         </PmaFieldset>
                     )}
@@ -492,6 +621,11 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     <PmaInput label="Studio" value={formData.filmBanner} onChange={val => handleChange('filmBanner', val)} />
                                 </div>
                                 <PmaInput label="Star Cast" value={formData.filmCast} onChange={val => handleChange('filmCast', val)} placeholder="Separate with commas" />
+                                <div className="grid grid-cols-3 gap-4">
+                                    <PmaInput label="Apple ID (Producer)" value={formData.appleProducerId || ''} onChange={val => handleChange('appleProducerId', val)} />
+                                    <PmaInput label="Apple ID (Director)" value={formData.appleDirectorId || ''} onChange={val => handleChange('appleDirectorId', val)} />
+                                    <PmaInput label="Apple ID (Starcast)" value={formData.appleStarcastId || ''} onChange={val => handleChange('appleStarcastId', val)} />
+                                </div>
                             </div>
                         </PmaFieldset>
                     )}
@@ -512,13 +646,57 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                                 )}
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
-                                                <PmaInput label="Track Title" value={track.title} onChange={val => handleTrackChange(index, 'title', val)} />
+                                                <PmaInput label="Track Title *" value={track.title} onChange={val => handleTrackChange(index, 'title', val)} />
                                                 <PmaInput label="Version" value={track.versionTitle} onChange={val => handleTrackChange(index, 'versionTitle', val)} placeholder="Radio Edit" />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <ArtistSelector label="Primary Artist(s) *" allArtists={labelArtists} selectedArtistIds={track.primaryArtistIds || []} onChange={(ids) => handleTrackChange(index, 'primaryArtistIds', ids)} />
+                                                <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={track.featuredArtistIds || []} onChange={(ids) => handleTrackChange(index, 'featuredArtistIds', ids)} />
                                             </div>
                                             <div className="grid grid-cols-3 gap-4">
                                                 <PmaInput label="ISRC" value={track.isrc} onChange={val => handleTrackChange(index, 'isrc', val)} placeholder="Auto-generate" />
-                                                <PmaInput label="Composer" value={track.composer} onChange={val => handleTrackChange(index, 'composer', val)} />
-                                                <PmaInput label="Lyricist" value={track.lyricist} onChange={val => handleTrackChange(index, 'lyricist', val)} />
+                                                <PmaInput label="Composer *" value={track.composer} onChange={val => handleTrackChange(index, 'composer', val)} />
+                                                <PmaInput label="Lyricist *" value={track.lyricist} onChange={val => handleTrackChange(index, 'lyricist', val)} />
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <PmaInput label="Remixer Name" value={track.remixerName || ''} onChange={val => handleTrackChange(index, 'remixerName', val)} />
+                                                <PmaInput label="Composer IPI" value={track.composerIpi || ''} onChange={val => handleTrackChange(index, 'composerIpi', val)} />
+                                                <PmaInput label="Lyricist IPI" value={track.lyricistIpi || ''} onChange={val => handleTrackChange(index, 'lyricistIpi', val)} />
+                                            </div>
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <PmaSelect
+                                                    label="IPRS (Composer)"
+                                                    value={track.composerIprs || 'No'}
+                                                    onChange={val => handleTrackChange(index, 'composerIprs', val)}
+                                                    options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]}
+                                                />
+                                                <PmaSelect
+                                                    label="IPRS (Lyricist)"
+                                                    value={track.lyricistIprs || 'No'}
+                                                    onChange={val => handleTrackChange(index, 'lyricistIprs', val)}
+                                                    options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]}
+                                                />
+                                                <PmaSelect
+                                                    label="Is Instrumental"
+                                                    value={track.isInstrumental || 'No'}
+                                                    onChange={val => handleTrackChange(index, 'isInstrumental', val)}
+                                                    options={[{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }]}
+                                                />
+                                            </div>
+                                            <PmaSelect
+                                                label="Parental Advisory"
+                                                value={track.explicit ? 'Explicit' : 'Not Explicit'}
+                                                onChange={val => handleTrackChange(index, 'explicit', val === 'Explicit')}
+                                                options={[{ value: 'Not Explicit', label: 'Not Explicit' }, { value: 'Explicit', label: 'Explicit' }]}
+                                            />
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <PmaInput label="Apple ID (Remixer)" value={track.appleRemixerId || ''} onChange={val => handleTrackChange(index, 'appleRemixerId', val)} />
+                                                <PmaInput label="Apple ID (Composer)" value={track.appleComposerId || ''} onChange={val => handleTrackChange(index, 'appleComposerId', val)} />
+                                                <PmaInput label="Apple ID (Lyricist)" value={track.appleLyricistId || ''} onChange={val => handleTrackChange(index, 'appleLyricistId', val)} />
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <PmaInput label="CRBT Title" value={track.crbtTitle || ''} onChange={val => handleTrackChange(index, 'crbtTitle', val)} placeholder="e.g. Neon Nights (CRBT)" />
+                                                <PmaInput label="CRBT Duration (hh:mm:ss)" value={track.crbtDuration || ''} onChange={val => handleTrackChange(index, 'crbtDuration', formatDuration(val))} placeholder="00:00:30" />
                                             </div>
                                             <div className="border-2 border-dashed border-[#ccc] p-4 bg-white text-center relative">
                                                 {track.audioUrl ? (
@@ -528,7 +706,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                                     </div>
                                                 ) : (
                                                     <>
-                                                        <span className="text-xs text-[#666]">Select WAV Master</span>
+                                                        <span className="text-xs text-[#666]">Select WAV Master *</span>
                                                         <input type="file" accept=".wav" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleAudioSelect(f, index); }} />
                                                     </>
                                                 )}
@@ -547,7 +725,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                     {formData.artworkUrl ? (
                                         <img src={stagedArtwork ? URL.createObjectURL(stagedArtwork) : formData.artworkUrl} className="w-full h-full object-cover" alt="Cover" />
                                     ) : (
-                                        <span className="text-xs text-[#666]">Select 3000x3000px Art</span>
+                                        <span className="text-xs text-[#666]">Select 3000x3000px Art *</span>
                                     )}
                                     <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleArtworkSelect(f); }} />
                                 </div>
@@ -586,7 +764,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 <div className="flex justify-between items-center pt-4 border-t border-[#ccc]">
                     <PmaButton variant="secondary" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || isSubmitting}>Previous</PmaButton>
                     {step < 7 ? (
-                        <PmaButton variant="primary" onClick={() => setStep(s => s + 1)} disabled={isSubmitting}>Next</PmaButton>
+                        <PmaButton variant="primary" onClick={handleNext} disabled={isSubmitting}>Next</PmaButton>
                     ) : (
                         <div className="flex gap-2">
                             <PmaButton variant="secondary" onClick={() => handleAction(false)} disabled={isSubmitting}>Save Draft</PmaButton>
@@ -623,7 +801,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             <div className="flex justify-between items-center px-2 mb-6 overflow-x-auto pb-4 custom-scrollbar">
                 {['General', 'Commercial', 'Genre', 'Film', 'Tracks', 'Artwork', 'Review'].map((name, index) => (
                     <React.Fragment key={name}>
-                        <div className="flex flex-col items-center gap-2 cursor-pointer min-w-[60px]" onClick={() => !isSubmitting && setStep(index + 1)}>
+                        <div className="flex flex-col items-center gap-2 cursor-pointer min-w-[60px]" onClick={() => handleTabClick(index + 1)}>
                             <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] transition-all duration-300 ${
                                 step > index + 1 ? 'bg-primary text-black' : 
                                 (step === index + 1 ? 'bg-primary text-black scale-105' : 'bg-white/5 text-gray-600 border border-white/5')
@@ -678,20 +856,32 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <Input label="Album Title" placeholder="e.g. Neon Nights" value={formData.title} onChange={e => handleChange('title', e.target.value)} required className="h-12" />
-                             <div className="space-y-1.5">
-                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Album Type</label>
-                                <select 
-                                    value={formData.releaseType} 
-                                    onChange={e => handleChange('releaseType', e.target.value as ReleaseType)}
-                                    className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
-                                >
-                                    {Object.values(ReleaseType).map(t => <option key={t} value={t} className="bg-gray-900">{t}</option>)}
-                                </select>
+                            <Input label="Album Title *" placeholder="e.g. Neon Nights" value={formData.title} onChange={e => handleChange('title', e.target.value)} required className="h-12" />
+                             <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                    <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Album Type *</label>
+                                    <select 
+                                        value={formData.releaseType} 
+                                        onChange={e => handleChange('releaseType', e.target.value as ReleaseType)}
+                                        className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                                    >
+                                        {Object.values(ReleaseType).map(t => <option key={t} value={t} className="bg-gray-900">{t}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Content Type *</label>
+                                    <select 
+                                        value={formData.contentType || ContentType.ALBUM} 
+                                        onChange={e => handleChange('contentType', e.target.value as ContentType)}
+                                        className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                                    >
+                                        {Object.values(ContentType).map(t => <option key={t} value={t} className="bg-gray-900">{t}</option>)}
+                                    </select>
+                                </div>
                             </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
+                            <ArtistSelector label="Primary Artist(s) *" allArtists={labelArtists} selectedArtistIds={formData.primaryArtistIds || []} onChange={(ids) => handleChange('primaryArtistIds', ids)} />
                             <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={formData.featuredArtistIds || []} onChange={(ids) => handleChange('featuredArtistIds', ids)} />
                         </div>
                     </div>
@@ -708,11 +898,26 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             <Input label="Catalogue #" placeholder="e.g. LAB-001" value={formData.catalogueNumber} onChange={e => handleChange('catalogueNumber', e.target.value)} className="h-12" />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <Input label="Release Date" type="date" value={formData.releaseDate} onChange={e => handleChange('releaseDate', e.target.value)} className="h-12" />
-                            <Input label="P-Line" placeholder="e.g. 2024 DigitalSight" value={formData.pLine} onChange={e => handleChange('pLine', e.target.value)} className="h-12" />
-                            <Input label="C-Line" placeholder="e.g. 2024 DigitalSight" value={formData.cLine} onChange={e => handleChange('cLine', e.target.value)} className="h-12" />
+                            <Input label="Release Date *" type="date" value={formData.releaseDate} onChange={e => handleChange('releaseDate', e.target.value)} className="h-12" />
+                            <Input label="P-Line *" placeholder="e.g. DigitalSight" value={formData.pLine} onChange={e => handleChange('pLine', e.target.value)} className="h-12" />
+                            <Input label="C-Line *" placeholder="e.g. DigitalSight" value={formData.cLine} onChange={e => handleChange('cLine', e.target.value)} className="h-12" />
                         </div>
-                        <Input label="Publisher" placeholder="Company Name" value={formData.publisher} onChange={e => handleChange('publisher', e.target.value)} className="h-12" />
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <Input label="Publisher *" placeholder="Company Name" value={formData.publisher} onChange={e => handleChange('publisher', e.target.value)} className="h-12" />
+                            <Input label="Description" placeholder="Album description" value={formData.description || ''} onChange={e => handleChange('description', e.target.value)} className="h-12" />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Input label="IPI (Label)" value={formData.labelIpi || ''} onChange={e => handleChange('labelIpi', e.target.value)} className="h-12" />
+                            <div className="space-y-1.5">
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">IPRS Ownership (Label)</label>
+                                <select value={formData.labelIprs || 'No'} onChange={e => handleChange('labelIprs', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
+                                    <option value="Yes" className="bg-gray-900">Yes</option>
+                                    <option value="No" className="bg-gray-900">No</option>
+                                </select>
+                            </div>
+                            <Input label="Time of Music Release" value={formData.timeOfMusicRelease || '00:00:00'} onChange={e => handleChange('timeOfMusicRelease', e.target.value)} className="h-12" />
+                        </div>
+                        <Input label="Date of Expiry" type="date" value={formData.dateOfExpiry || ''} onChange={e => handleChange('dateOfExpiry', e.target.value)} className="h-12" />
                     </div>
                 )}
 
@@ -724,7 +929,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div className="space-y-1.5">
-                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Primary Genre</label>
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Primary Genre *</label>
                                 <select 
                                     value={formData.genre} 
                                     onChange={e => {
@@ -738,7 +943,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                 </select>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Sub-Genre</label>
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Sub-Genre *</label>
                                 <select 
                                     value={formData.subGenre} 
                                     onChange={e => handleChange('subGenre', e.target.value)} 
@@ -751,24 +956,28 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <div className="space-y-1.5">
-                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Core Mood</label>
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Core Mood *</label>
                                 <select value={formData.mood} onChange={e => handleChange('mood', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
                                     {MOODS.map(m => <option key={m} value={m} className="bg-gray-900">{m}</option>)}
                                 </select>
                             </div>
                              <div className="space-y-1.5">
-                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Language</label>
+                                <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Language *</label>
                                 <select value={formData.language} onChange={e => handleChange('language', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
                                     {LANGUAGES.map(l => <option key={l} value={l} className="bg-gray-900">{l}</option>)}
                                 </select>
                             </div>
                         </div>
-                        <div className="flex items-center gap-4 p-6 bg-black/40 rounded-2xl border border-white/5 group hover:border-primary/20 transition-all">
-                            <div className="relative flex items-center justify-center">
-                                <input type="checkbox" id="explicit_all" checked={formData.explicit} onChange={e => handleChange('explicit', e.target.checked)} className="peer appearance-none w-6 h-6 rounded-lg bg-black/40 border-2 border-white/10 checked:bg-primary checked:border-primary transition-all cursor-pointer" />
-                                <svg className="absolute w-4 h-4 text-black opacity-0 peer-checked:opacity-100 transition-opacity pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="4"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                            </div>
-                            <label htmlFor="explicit_all" className="text-xs font-black uppercase text-gray-400 tracking-widest cursor-pointer group-hover:text-white transition-colors">Mark as Explicit</label>
+                        <div className="space-y-1.5">
+                            <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Parental Advisory *</label>
+                            <select 
+                                value={formData.explicit ? 'Explicit' : 'Not Explicit'} 
+                                onChange={e => handleChange('explicit', e.target.value === 'Explicit')} 
+                                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                            >
+                                <option value="Not Explicit" className="bg-gray-900">Not Explicit</option>
+                                <option value="Explicit" className="bg-gray-900">Explicit</option>
+                            </select>
                         </div>
                     </div>
                 )}
@@ -788,6 +997,11 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             <Input label="Studio" value={formData.filmBanner} onChange={e => handleChange('filmBanner', e.target.value)} className="h-12" />
                         </div>
                         <Input label="Star Cast" placeholder="Separate with commas" value={formData.filmCast} onChange={e => handleChange('filmCast', e.target.value)} className="h-12" />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                            <Input label="Apple ID (Producer)" value={formData.appleProducerId || ''} onChange={e => handleChange('appleProducerId', e.target.value)} className="h-12" />
+                            <Input label="Apple ID (Director)" value={formData.appleDirectorId || ''} onChange={e => handleChange('appleDirectorId', e.target.value)} className="h-12" />
+                            <Input label="Apple ID (Starcast)" value={formData.appleStarcastId || ''} onChange={e => handleChange('appleStarcastId', e.target.value)} className="h-12" />
+                        </div>
                     </div>
                 )}
 
@@ -815,10 +1029,68 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                         <Input label="Version" placeholder="e.g. Radio Edit" value={track.versionTitle} onChange={e => handleTrackChange(index, 'versionTitle', e.target.value)} className="h-12" />
                                     </div>
 
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                                        <ArtistSelector label="Primary Artist(s)" allArtists={labelArtists} selectedArtistIds={track.primaryArtistIds || []} onChange={(ids) => handleTrackChange(index, 'primaryArtistIds', ids)} />
+                                        <ArtistSelector label="Featured Artist(s)" allArtists={labelArtists} selectedArtistIds={track.featuredArtistIds || []} onChange={(ids) => handleTrackChange(index, 'featuredArtistIds', ids)} />
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
                                         <Input label="ISRC" placeholder="Auto-generate" value={track.isrc} onChange={e => handleTrackChange(index, 'isrc', e.target.value)} className="h-12" />
-                                        <Input label="Composer" placeholder="Legal Name" value={track.composer} onChange={e => handleTrackChange(index, 'composer', e.target.value)} className="h-12" />
-                                        <Input label="Lyricist" placeholder="Legal Name" value={track.lyricist} onChange={e => handleTrackChange(index, 'lyricist', e.target.value)} className="h-12" />
+                                        <Input label="Composer *" placeholder="Legal Name" value={track.composer} onChange={e => handleTrackChange(index, 'composer', e.target.value)} className="h-12" />
+                                        <Input label="Lyricist *" placeholder="Legal Name" value={track.lyricist} onChange={e => handleTrackChange(index, 'lyricist', e.target.value)} className="h-12" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                                        <Input label="Remixer Name" value={track.remixerName || ''} onChange={e => handleTrackChange(index, 'remixerName', e.target.value)} className="h-12" />
+                                        <Input label="Composer IPI No." value={track.composerIpi || ''} onChange={e => handleTrackChange(index, 'composerIpi', e.target.value)} className="h-12" />
+                                        <Input label="Lyricist IPI No." value={track.lyricistIpi || ''} onChange={e => handleTrackChange(index, 'lyricistIpi', e.target.value)} className="h-12" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">IPRS (Composer)</label>
+                                            <select value={track.composerIprs || 'No'} onChange={e => handleTrackChange(index, 'composerIprs', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
+                                                <option value="Yes" className="bg-gray-900">Yes</option>
+                                                <option value="No" className="bg-gray-900">No</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">IPRS (Lyricist)</label>
+                                            <select value={track.lyricistIprs || 'No'} onChange={e => handleTrackChange(index, 'lyricistIprs', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
+                                                <option value="Yes" className="bg-gray-900">Yes</option>
+                                                <option value="No" className="bg-gray-900">No</option>
+                                            </select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Is Instrumental</label>
+                                            <select value={track.isInstrumental || 'No'} onChange={e => handleTrackChange(index, 'isInstrumental', e.target.value)} className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12">
+                                                <option value="Yes" className="bg-gray-900">Yes</option>
+                                                <option value="No" className="bg-gray-900">No</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="block text-[9px] font-black text-gray-500 uppercase tracking-[0.2em] ml-1">Parental Advisory</label>
+                                        <select 
+                                            value={track.explicit ? 'Explicit' : 'Not Explicit'} 
+                                            onChange={e => handleTrackChange(index, 'explicit', e.target.value === 'Explicit')} 
+                                            className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white outline-none focus:ring-1 focus:ring-primary/50 transition-all appearance-none cursor-pointer h-12"
+                                        >
+                                            <option value="Not Explicit" className="bg-gray-900">Not Explicit</option>
+                                            <option value="Explicit" className="bg-gray-900">Explicit</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10">
+                                        <Input label="Apple ID (Remixer)" value={track.appleRemixerId || ''} onChange={e => handleTrackChange(index, 'appleRemixerId', e.target.value)} className="h-12" />
+                                        <Input label="Apple ID (Composer)" value={track.appleComposerId || ''} onChange={e => handleTrackChange(index, 'appleComposerId', e.target.value)} className="h-12" />
+                                        <Input label="Apple ID (Lyricist)" value={track.appleLyricistId || ''} onChange={e => handleTrackChange(index, 'appleLyricistId', e.target.value)} className="h-12" />
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                                        <Input label="CRBT Title" placeholder="e.g. Neon Nights (CRBT)" value={track.crbtTitle || ''} onChange={e => handleTrackChange(index, 'crbtTitle', e.target.value)} className="h-12" />
+                                        <Input label="CRBT Duration (hh:mm:ss)" placeholder="00:00:30" value={track.crbtDuration || ''} onChange={e => handleTrackChange(index, 'crbtDuration', formatDuration(e.target.value))} className="h-12" />
                                     </div>
 
                                     <div className={`border-2 border-dashed rounded-xl p-6 relative transition-all duration-300 z-10 ${track.audioUrl ? 'bg-primary/5 border-primary/30' : 'bg-black/40 border-white/10 hover:border-primary/40'}`}>
@@ -844,7 +1116,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                         ) : (
                                             <div className="text-center py-4 group/upload cursor-pointer">
                                                 <UploadIcon className="h-6 w-6 text-gray-500 mx-auto mb-2 group-hover/upload:text-primary transition-colors" />
-                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Select WAV Master</p>
+                                                <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em] group-hover:text-white transition-colors">Select WAV Master *</p>
                                                 <input type="file" accept=".wav" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleAudioSelect(f, index); }} />
                                             </div>
                                         )}
@@ -873,7 +1145,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             ) : (
                                 <div className="text-center p-6">
                                     <UploadIcon className="h-8 w-8 text-gray-500 group-hover:text-primary transition-colors mx-auto mb-4" />
-                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">Select Art</p>
+                                    <p className="text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">Select Art *</p>
                                 </div>
                             )}
                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept="image/*" onChange={(e) => { const f = e.target.files?.[0]; if(f) handleArtworkSelect(f); }} />
@@ -923,7 +1195,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
             <div className="flex justify-between items-center pt-6 border-t border-white/5 bg-gray-900 -mx-8 px-8 pb-2">
                 <Button variant="secondary" onClick={() => setStep(s => Math.max(1, s - 1))} disabled={step === 1 || isSubmitting} className="px-8 py-3 font-black uppercase text-[9px] tracking-[0.2em] rounded-lg">Previous</Button>
                 {step < 7 ? (
-                    <Button onClick={() => setStep(s => s + 1)} disabled={isSubmitting} className="px-10 py-3 font-black uppercase text-[9px] tracking-[0.2em] shadow-lg shadow-primary/20 rounded-lg">Next Section</Button>
+                    <Button onClick={handleNext} disabled={isSubmitting} className="px-10 py-3 font-black uppercase text-[9px] tracking-[0.2em] shadow-lg shadow-primary/20 rounded-lg">Next Section</Button>
                 ) : (
                     <div className="flex gap-4">
                         <Button onClick={() => handleAction(false)} variant="secondary" disabled={isSubmitting} className="px-8 py-4 font-black uppercase text-[9px] tracking-[0.2em] rounded-lg border-white/10">Draft</Button>

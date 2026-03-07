@@ -21,11 +21,9 @@ const EXCEL_HEADERS = [
   'Film Director', 'Film Producer', 'Film Star Cast / Actors', 'Parental Advisory (Explicit etc)', 
   'IS INSTRUMENTAL', 'Spotify Artist Profile / ID for the track Main Artist', 
   'Spotify Artist Profile / ID for the track Featured Artist', 'Apple Artist ID for Track Main Artist', 
-  'Apple Artist ID for Featured Artist',
   'Apple Artist ID for Remixer', 'Apple Artist ID for Composer', 'Apple Artist ID for Lyricist', 
   'Apple Artist ID for Film Producer', 'Apple Artist ID for Film Director', 'Apple Artist ID for Starcast', 
-  'Facebook page link for Track Main Artist', 'Instagram Artist handle for Track Main Artist',
-  'Instagram Artist handle for Featured Artist'
+  'Facebook page link for Track Main Artist', 'Instagram Artist handle for Track Main Artist'
 ];
 
 const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels: Map<string, Label>) => {
@@ -47,76 +45,74 @@ const mapReleaseToRows = (release: Release, artists: Map<string, Artist>, labels
     const trackMainArtists = primaryArtists.map(a => a?.name).join(', ');
     const trackFeaturedArtists = featuredArtists.map(a => a?.name).join(', ');
     
-    const spotifyMain = primaryArtists.map(a => a?.spotifyId || '').filter(id => id.trim() !== '').map(id => id.startsWith('http') ? id : `https://open.spotify.com/artist/${id}`).join(', ');
-    const spotifyFeatured = featuredArtists.map(a => a?.spotifyId || '').filter(id => id.trim() !== '').map(id => id.startsWith('http') ? id : `https://open.spotify.com/artist/${id}`).join(', ');
+    const spotifyMain = primaryArtists.map(a => a?.spotifyId || '').filter(id => id.trim() !== '').map(id => id.split('/').pop() || '').join(', ');
+    const spotifyFeatured = featuredArtists.map(a => a?.spotifyId || '').filter(id => id.trim() !== '').map(id => id.split('/').pop() || '').join(', ');
     
-    const appleMain = primaryArtists.map(a => a?.appleMusicId || '').filter(id => id.trim() !== '').map(id => id.startsWith('http') ? id : `https://music.apple.com/artist/${id}`).join(', ');
-    const appleFeatured = featuredArtists.map(a => a?.appleMusicId || '').filter(id => id.trim() !== '').map(id => id.startsWith('http') ? id : `https://music.apple.com/artist/${id}`).join(', ');
+    const appleMain = primaryArtists.map(a => a?.appleMusicId || '').filter(id => id.trim() !== '').map(id => id.split('/').pop() || '').join(', ');
     
     const instaMain = primaryArtists.map(a => a?.instagramUrl || '').filter(id => id.trim() !== '').map(url => url.startsWith('http') ? url : `https://instagram.com/${url}`).join(', ');
-    const instaFeatured = featuredArtists.map(a => a?.instagramUrl || '').filter(id => id.trim() !== '').map(url => url.startsWith('http') ? url : `https://instagram.com/${url}`).join(', ');
+    
+    const facebookMain = primaryArtists.map(a => a?.facebookUrl || '').filter(id => id.trim() !== '').map(url => url.startsWith('http') ? url : `https://facebook.com/${url}`).join(', ');
     
     const mins = Math.floor((track.duration || 0) / 60);
     const secs = (track.duration || 0) % 60;
     const durationStr = `${mins}:${secs.toString().padStart(2, '0')}`;
 
     return [
-      track.crbtCutName || '',
+      track.crbtTitle || '',
       track.title || 'Untitled',
       release.title || 'Untitled',
       release.language || '',
-      release.releaseType || 'Single',
-      track.contentType || 'Music',
+      release.releaseType || 'Album',
+      release.contentType || 'Album',
       release.genre || '',
       release.subGenre || '',
       release.mood || '',
-      '',
+      release.description || '',
       release.upc || '',
       track.isrc || '',
       label?.name || 'Unknown Label',
-      'Yes',
-      '',
+      release.labelIprs || 'No',
+      release.labelIpi || '',
       release.publisher || '',
       albumArtist?.name || '',
       trackMainArtists || '',
       trackFeaturedArtists || '',
-      '',
+      track.remixerName || '',
       track.composer || '',
-      '',
-      '',
+      track.composerIprs || '',
+      track.composerIpi || '',
       track.lyricist || '',
-      '',
-      '',
+      track.lyricistIpi || '',
+      track.lyricistIprs || '',
       track.dolbyIsrc || '',
       track.trackNumber || 1,
       durationStr,
-      track.crbtTime || '00:30',
+      track.crbtDuration || '00:00:30',
       release.originalReleaseDate || '',
       release.releaseDate || '',
       release.releaseDate || '',
-      '00:00:00',
-      '',
+      release.timeOfMusicRelease || '00:00:00',
+      release.dateOfExpiry || '',
       release.cLine || '',
       release.pLine || '',
       release.filmBanner || '',
       release.filmDirector || '',
       release.filmProducer || '',
       release.filmCast || '',
-      track.explicit ? 'Explicit' : 'Clean',
-      'No',
+      track.explicit ? 'Explicit' : 'Not Explicit',
+      track.isInstrumental || 'No',
       spotifyMain,
       spotifyFeatured,
       appleMain,
-      appleFeatured,
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      '',
-      instaMain,
-      instaFeatured
+      track.appleRemixerId || '',
+      track.appleComposerId || '',
+      track.appleLyricistId || '',
+      release.appleProducerId || '',
+      release.appleDirectorId || '',
+      release.appleStarcastId || '',
+      facebookMain,
+      instaMain
     ];
   });
 };
