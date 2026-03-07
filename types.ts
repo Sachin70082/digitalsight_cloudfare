@@ -146,7 +146,7 @@ export enum ReleaseStatus {
 
 export enum ReleaseType {
     ALBUM = 'Album',
-    SINGLE = 'Single',
+    SINGLE = 'Film',
 }
 
 export enum ContentType {
