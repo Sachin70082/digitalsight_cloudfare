@@ -6,8 +6,9 @@ import { getReleaseExcelBuffer } from '../services/excelService';
 import { Release, ReleaseStatus, Track, UserRole, Artist, Label, InteractionNote } from '../types';
 import { AppContext } from '../App';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, PageLoader, Textarea, Modal, Spinner, Input } from '../components/ui';
-import { DownloadIcon, CheckCircleIcon, XCircleIcon, ArrowLeftIcon, MusicIcon, SpotifyIcon, AppleMusicIcon, InstagramIcon } from '../components/Icons';
+import { DownloadIcon, CheckCircleIcon, XCircleIcon, ArrowLeftIcon, MusicIcon, SpotifyIcon, AppleMusicIcon, InstagramIcon, SparklesIcon } from '../components/Icons';
 import { PmaFieldset, PmaTable, PmaTR, PmaTD, PmaButton, PmaInput, PmaStatusBadge, PmaInfoBar, PmaSectionTitle, PmaActionLink, PmaAudioPlayer } from '../components/PmaStyle';
+import { AcrCloudRecognition } from '../components/AcrCloudRecognition';
 
 const MetaItem: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
     <div>
@@ -139,6 +140,7 @@ const PmaReleaseReviewView: React.FC<{
     isPublished: boolean;
     isProcessing: boolean;
     handleDownloadPackage: () => void;
+    setAcrModalOpen: (o: boolean) => void;
     setReturnModalOpen: (o: boolean) => void;
     setApproveConfirmOpen: (o: boolean) => void;
     setTakedownConfirmOpen: (o: boolean) => void;
@@ -151,7 +153,7 @@ const PmaReleaseReviewView: React.FC<{
     setPlayingTrack: (t: { src: string, title: string } | null) => void;
 }> = ({ 
     release, artistsMap, label, isPublished, isProcessing, 
-    handleDownloadPackage, setReturnModalOpen, setApproveConfirmOpen, 
+    handleDownloadPackage, setAcrModalOpen, setReturnModalOpen, setApproveConfirmOpen, 
     setTakedownConfirmOpen, setRejectModalOpen, setFeedbackNote, 
     setCurrentStep, onBack, onPlayTrack, playingTrack, setPlayingTrack
 }) => {
@@ -202,6 +204,10 @@ const PmaReleaseReviewView: React.FC<{
                         <div className="p-4 space-y-3">
                             <PmaButton variant="primary" className="w-full" onClick={handleDownloadPackage} disabled={isProcessing}>
                                 Download Metadata (XLSX)
+                            </PmaButton>
+                            
+                            <PmaButton variant="secondary" className="w-full" onClick={() => setAcrModalOpen(true)} disabled={isProcessing}>
+                                ACR Cloud Recognition
                             </PmaButton>
                             
                             {!isPublished ? (
@@ -410,6 +416,7 @@ const ReleaseReview: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
 
     // Interaction Modals
+    const [isAcrModalOpen, setAcrModalOpen] = useState(false);
     const [isReturnModalOpen, setReturnModalOpen] = useState(false);
     const [isApproveConfirmOpen, setApproveConfirmOpen] = useState(false);
     const [isTakedownConfirmOpen, setTakedownConfirmOpen] = useState(false);
@@ -638,6 +645,7 @@ const ReleaseReview: React.FC = () => {
                     isPublished={isPublished}
                     isProcessing={isProcessing}
                     handleDownloadPackage={handleDownloadPackage}
+                    setAcrModalOpen={setAcrModalOpen}
                     setReturnModalOpen={setReturnModalOpen}
                     setApproveConfirmOpen={setApproveConfirmOpen}
                     setTakedownConfirmOpen={setTakedownConfirmOpen}
@@ -649,6 +657,10 @@ const ReleaseReview: React.FC = () => {
                     playingTrack={playingTrack}
                     setPlayingTrack={setPlayingTrack}
                 />
+
+                <Modal isOpen={isAcrModalOpen} onClose={() => setAcrModalOpen(false)} title="ACR Cloud Audio Recognition" size="3xl">
+                    <AcrCloudRecognition tracks={release.tracks || []} />
+                </Modal>
 
                 <Modal isOpen={isReturnModalOpen} onClose={() => setReturnModalOpen(false)} title="Correction Directive" size="lg">
                     <div className="space-y-4 p-4">
@@ -830,6 +842,17 @@ const ReleaseReview: React.FC = () => {
                                 <DownloadIcon className="w-6 h-6" />
                                 <span className="text-xs uppercase font-black tracking-[0.15em]">Download Metadata</span>
                              </Button>
+
+                              <Button 
+                                 onClick={() => setAcrModalOpen(true)}
+                                 disabled={isProcessing}
+                                 variant="secondary"
+                                 className="w-full flex items-center justify-center gap-4 py-5 rounded-[1.25rem]"
+                              >
+                                <SparklesIcon className="w-6 h-6" />
+                                <span className="text-xs uppercase font-black tracking-[0.15em]">ACR Recognition</span>
+                             </Button>
+
                              <p className="text-[10px] text-gray-600 text-center uppercase font-bold tracking-widest leading-relaxed">
                                 Triggers instant download of Metadata (XLSX) and <br/>opens the artwork master link in a new tab.
                              </p>
@@ -996,6 +1019,10 @@ const ReleaseReview: React.FC = () => {
                     </Card>
                 </div>
             </div>
+
+            <Modal isOpen={isAcrModalOpen} onClose={() => setAcrModalOpen(false)} title="ACR Cloud Audio Recognition" size="3xl">
+                <AcrCloudRecognition tracks={release.tracks || []} />
+            </Modal>
 
             <Modal isOpen={isReturnModalOpen} onClose={() => setReturnModalOpen(false)} title="Correction Directive" size="lg">
                 <div className="space-y-6">

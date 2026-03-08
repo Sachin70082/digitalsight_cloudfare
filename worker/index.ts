@@ -303,6 +303,12 @@ async function handleResetPassword(request: Request, env: Env, corsHeaders: any)
         });
     }
 }
+async function getUserLabelId(env: Env, currentUser: any) {
+    if (currentUser.labelId) return currentUser.labelId;
+    const userRecord = await env.DB.prepare('SELECT label_id FROM users WHERE id = ?').bind(currentUser.sub).first() as any;
+    return userRecord?.label_id;
+}
+
 // --- CRUD Handlers ---
 
 async function handleUsers(request: Request, env: Env, corsHeaders: any, currentUser: any) {
@@ -680,13 +686,6 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
     const url = new URL(request.url);
     const id = url.pathname.split('/').pop();
 
-    // Helper to get user's label ID with fallback
-    const getUserLabelId = async () => {
-        if (currentUser.labelId) return currentUser.labelId;
-        const userRecord = await env.DB.prepare('SELECT label_id FROM users WHERE id = ?').bind(currentUser.sub).first() as any;
-        return userRecord?.label_id;
-    };
-
     if (request.method === 'GET') {
         if (id && id !== 'artists') {
             const artist = await env.DB.prepare('SELECT * FROM artists WHERE id = ?').bind(id).first();
@@ -710,7 +709,7 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
             `;
             params = [targetLabelId];
         } else if (!isStaff) {
-            const userLabelId = await getUserLabelId();
+            const userLabelId = await getUserLabelId(env, currentUser);
             if (userLabelId) {
                 query = `
                     WITH RECURSIVE sub_labels AS (
@@ -746,12 +745,23 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
         const instagramUrl = data.instagramUrl || null;
         const email = data.email || null;
 
-        // Security check: If not staff, ensure they are creating artist for their own label
+        // Security check: If not staff, ensure they are creating artist for their own label or a sub-label
         const isStaff = currentUser.role === 'Owner' || currentUser.role === 'Employee';
         if (!isStaff) {
-            const userLabelId = await getUserLabelId();
+            const userLabelId = await getUserLabelId(env, currentUser);
             if (labelId !== userLabelId) {
-                return new Response(JSON.stringify({ error: 'Forbidden: Cannot create artist for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                const isAuthorized = await env.DB.prepare(`
+                    WITH RECURSIVE sub_labels AS (
+                        SELECT id FROM labels WHERE id = ?
+                        UNION ALL
+                        SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                    )
+                    SELECT 1 FROM sub_labels WHERE id = ?
+                `).bind(userLabelId, labelId).first();
+
+                if (!isAuthorized) {
+                    return new Response(JSON.stringify({ error: 'Forbidden: Cannot create artist for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
             }
         }
 
@@ -774,17 +784,40 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
         const instagramUrl = data.instagramUrl || null;
         const email = data.email || null;
 
-        // Security check: If not staff, ensure they are updating artist for their own label
+        // Security check: If not staff, ensure they are updating artist for their own label or a sub-label
         const isStaff = currentUser.role === 'Owner' || currentUser.role === 'Employee';
         if (!isStaff) {
-            const userLabelId = await getUserLabelId();
+            const userLabelId = await getUserLabelId(env, currentUser);
             const artist = await env.DB.prepare('SELECT label_id FROM artists WHERE id = ?').bind(id).first() as any;
-            if (!artist || artist.label_id !== userLabelId) {
+            if (!artist) return new Response(null, { status: 404, headers: corsHeaders });
+
+            const isAuthorized = await env.DB.prepare(`
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT 1 FROM sub_labels WHERE id = ?
+            `).bind(userLabelId, artist.label_id).first();
+
+            if (!isAuthorized) {
                 return new Response(JSON.stringify({ error: 'Forbidden: Cannot update artist for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
-            // Also prevent moving artist to another label
-            if (labelId !== userLabelId) {
-                return new Response(JSON.stringify({ error: 'Forbidden: Cannot move artist to another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+            // Also prevent moving artist to a label they don't control
+            if (labelId !== artist.label_id) {
+                const isTargetAuthorized = await env.DB.prepare(`
+                    WITH RECURSIVE sub_labels AS (
+                        SELECT id FROM labels WHERE id = ?
+                        UNION ALL
+                        SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                    )
+                    SELECT 1 FROM sub_labels WHERE id = ?
+                `).bind(userLabelId, labelId).first();
+
+                if (!isTargetAuthorized) {
+                    return new Response(JSON.stringify({ error: 'Forbidden: Cannot move artist to another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
             }
         }
 
@@ -795,12 +828,23 @@ async function handleArtists(request: Request, env: Env, corsHeaders: any, curre
     }
 
     if (request.method === 'DELETE' && id) {
-        // Security check: If not staff, ensure they are deleting artist for their own label
+        // Security check: If not staff, ensure they are deleting artist for their own label or a sub-label
         const isStaff = currentUser.role === 'Owner' || currentUser.role === 'Employee';
         if (!isStaff) {
-            const userLabelId = await getUserLabelId();
+            const userLabelId = await getUserLabelId(env, currentUser);
             const artist = await env.DB.prepare('SELECT label_id FROM artists WHERE id = ?').bind(id).first() as any;
-            if (!artist || artist.label_id !== userLabelId) {
+            if (!artist) return new Response(null, { status: 404, headers: corsHeaders });
+
+            const isAuthorized = await env.DB.prepare(`
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT 1 FROM sub_labels WHERE id = ?
+            `).bind(userLabelId, artist.label_id).first();
+
+            if (!isAuthorized) {
                 return new Response(JSON.stringify({ error: 'Forbidden: Cannot delete artist for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
         }
@@ -913,6 +957,26 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
         const newId = crypto.randomUUID();
         const batch = [];
 
+        // Security check: If not staff, ensure they are creating release for their own label or a sub-label
+        const isStaff = currentUser.role === 'Owner' || currentUser.role === 'Employee';
+        if (!isStaff) {
+            const userLabelId = await getUserLabelId(env, currentUser);
+            if (data.labelId !== userLabelId) {
+                const isAuthorized = await env.DB.prepare(`
+                    WITH RECURSIVE sub_labels AS (
+                        SELECT id FROM labels WHERE id = ?
+                        UNION ALL
+                        SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                    )
+                    SELECT 1 FROM sub_labels WHERE id = ?
+                `).bind(userLabelId, data.labelId).first();
+
+                if (!isAuthorized) {
+                    return new Response(JSON.stringify({ error: 'Forbidden: Cannot create release for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                }
+            }
+        }
+
         batch.push(env.DB.prepare(`
             INSERT INTO releases (
                 id, title, version_title, release_type, content_type, primary_artist_ids, featured_artist_ids, label_id, 
@@ -969,6 +1033,24 @@ async function handleReleases(request: Request, env: Env, corsHeaders: any, curr
         const data = await request.json() as any;
         const current = await env.DB.prepare('SELECT * FROM releases WHERE id = ?').bind(id).first() as any;
         if (!current) return new Response(null, { status: 404, headers: corsHeaders });
+
+        // Security check: If not staff, ensure they are updating release for their own label or a sub-label
+        const isStaff = currentUser.role === 'Owner' || currentUser.role === 'Employee';
+        if (!isStaff) {
+            const userLabelId = await getUserLabelId(env, currentUser);
+            const isAuthorized = await env.DB.prepare(`
+                WITH RECURSIVE sub_labels AS (
+                    SELECT id FROM labels WHERE id = ?
+                    UNION ALL
+                    SELECT l.id FROM labels l JOIN sub_labels sl ON l.parent_label_id = sl.id
+                )
+                SELECT 1 FROM sub_labels WHERE id = ?
+            `).bind(userLabelId, current.label_id).first();
+
+            if (!isAuthorized) {
+                return new Response(JSON.stringify({ error: 'Forbidden: Cannot update release for another label' }), { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        }
 
         const batch = [];
 

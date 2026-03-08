@@ -179,22 +179,6 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 console.error('Failed to fetch genres:', err);
             }
 
-            // --- Fetch Artists (independent, always attempted) ---
-            try {
-                if (isPlatformSide) {
-                    const artists = targetLabelId
-                        ? await api.getArtistsByLabel(targetLabelId)
-                        : await api.getAllArtists();
-                    setLabelArtists(Array.isArray(artists) ? artists : []);
-                } else if (targetLabelId) {
-                    const artists = await api.getArtistsByLabel(targetLabelId);
-                    setLabelArtists(Array.isArray(artists) ? artists : []);
-                }
-            } catch (err) {
-                console.error('Failed to fetch artists:', err);
-                setLabelArtists([]);
-            }
-
             // --- Fetch Label Hierarchy (separate, failure won't block artists) ---
             try {
                 if (isPlatformSide) {
@@ -205,7 +189,7 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                 } else if (targetLabelId && user?.labelId && hierarchyLabels.length === 0) {
                     const [selfLabel, subLabels] = await Promise.all([
                         api.getLabel(user.labelId).catch(() => null),
-                        api.getSubLabels(targetLabelId).catch(() => [])
+                        api.getSubLabels(user.labelId).catch(() => [])
                     ]);
                     const safeSubLabels = Array.isArray(subLabels) ? subLabels : [];
                     const combinedLabels = selfLabel ? [selfLabel, ...safeSubLabels] : safeSubLabels;
@@ -232,12 +216,50 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                     console.error('Failed to load release:', err);
                 }
                 setIsLoading(false);
-            } else {
-                setFormData(prev => ({ ...prev, tracks: [emptyTrack(1)], labelId: user?.labelId || '' }));
+            } else if (formData.tracks.length === 0) {
+                const initialLabelId = user?.labelId || '';
+                setFormData(prev => ({ ...prev, tracks: [emptyTrack(1)], labelId: initialLabelId }));
             }
         };
         loadInitialData();
-    }, [initialReleaseId, user, formData.labelId]);
+    }, [initialReleaseId, user]);
+
+    // Separate effect for fetching artists when label changes
+    useEffect(() => {
+        const fetchArtists = async () => {
+            const isPlatformSide = user?.role === UserRole.OWNER || user?.role === UserRole.EMPLOYEE;
+            const targetLabelId = formData.labelId || user?.labelId;
+
+            try {
+                let artists;
+                if (isPlatformSide) {
+                    artists = targetLabelId
+                        ? await api.getArtistsByLabel(targetLabelId)
+                        : await api.getAllArtists();
+                } else if (targetLabelId) {
+                    artists = await api.getArtistsByLabel(targetLabelId);
+                }
+                
+                if (artists) {
+                    setLabelArtists(Array.isArray(artists) ? artists : []);
+                }
+            } catch (err) {
+                console.error('Failed to fetch artists:', err);
+                setLabelArtists([]);
+            }
+        };
+        fetchArtists();
+    }, [formData.labelId, user]);
+
+    // Effect to sync publisher with label name whenever labelId or hierarchyLabels changes
+    useEffect(() => {
+        if (formData.labelId && hierarchyLabels.length > 0) {
+            const selectedLabel = hierarchyLabels.find(l => l.id === formData.labelId);
+            if (selectedLabel && formData.publisher !== selectedLabel.name) {
+                setFormData(prev => ({ ...prev, publisher: selectedLabel.name }));
+            }
+        }
+    }, [formData.labelId, hierarchyLabels]);
 
     const handleChange = <T extends keyof FormData,>(field: T, value: FormData[T]) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -502,10 +524,17 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                             <div className="p-4 space-y-4">
                                 {showLabelSelector && (
                                     <PmaSelect
-                                        label="Target Label"
+                                        label="Publishing Entity"
                                         value={formData.labelId}
-                                        onChange={val => handleChange('labelId', val)}
-                                        options={hierarchyLabels.map(l => ({ value: l.id, label: l.name }))}
+                                        onChange={val => {
+                                            handleChange('labelId', val);
+                                            const selectedLabel = hierarchyLabels.find(l => l.id === val);
+                                            if (selectedLabel) handleChange('publisher', selectedLabel.name);
+                                        }}
+                                        options={hierarchyLabels.map(l => ({ 
+                                            value: l.id, 
+                                            label: l.id === user?.labelId ? `[MASTER] ${l.name}` : `↳ [CHILD] ${l.name}` 
+                                        }))}
                                     />
                                 )}
                                 <div className="grid grid-cols-2 gap-4">
@@ -848,7 +877,12 @@ const ReleaseForm: React.FC<ReleaseFormProps> = ({ onClose, onSave, initialRelea
                                 <label className="block text-[9px] font-black text-primary uppercase tracking-[0.2em] mb-3 ml-1">Publishing Entity</label>
                                 <select 
                                     value={formData.labelId} 
-                                    onChange={e => handleChange('labelId', e.target.value)}
+                                    onChange={e => {
+                                        const val = e.target.value;
+                                        handleChange('labelId', val);
+                                        const selectedLabel = hierarchyLabels.find(l => l.id === val);
+                                        if (selectedLabel) handleChange('publisher', selectedLabel.name);
+                                    }}
                                     className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm font-bold text-white focus:ring-1 focus:ring-primary/50 outline-none transition-all appearance-none cursor-pointer"
                                 >
                                     {hierarchyLabels.map(l => (
